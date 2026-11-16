@@ -15,6 +15,16 @@ Item {
   property string outputDir: Quickshell.env("HOME") + "/Pictures/Screenshots"
   property var emojiItems: []
   property var gifItems: []
+  property var selectedSticker: null
+  property bool libraryOpen: false
+  property var emojiLibrary: [
+    "😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "🥹", "😊", "😍", "🥰", "😘", "😎", "🤩", "🥳",
+    "😴", "🤔", "🙄", "😬", "😭", "😡", "🤯", "🤡", "👻", "💀", "🤖", "👀", "🙌", "👏", "👍", "👎",
+    "👋", "✌️", "🤞", "🙏", "💪", "🫶", "❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "💔", "💯",
+    "🔥", "✨", "⭐", "🌟", "💫", "🎉", "🎊", "🚀", "⚡", "☀️", "🌈", "☁️", "🌙", "🌸", "🌻", "🍀",
+    "🍕", "🍔", "🍟", "🌮", "🍩", "🍰", "☕", "🧋", "🍺", "⚽", "🏀", "🎮", "🎵", "🎧", "🎨", "📸",
+    "✅", "❌", "❓", "❗", "💡", "💬", "💤", "🎯", "🏆", "💎", "🧿", "🪄", "🪩", "🛸", "🐱", "🐶"
+  ]
   property var bundledGifs: [
     { label: "✨", source: Qt.resolvedUrl("assets/sparkle.gif") },
     { label: "🎉", source: Qt.resolvedUrl("assets/party.gif") }
@@ -34,6 +44,8 @@ Item {
     imagePath = path
     emojiItems = []
     gifItems = []
+    selectedSticker = null
+    libraryOpen = false
     opened = true
     Qt.callLater(function() { previewArea.forceActiveFocus() })
   }
@@ -45,6 +57,7 @@ Item {
     var next = emojiItems.slice()
     next.push({ text: value, x: imageCanvas.width * 0.44, y: imageCanvas.height * 0.4, size: 48 })
     emojiItems = next
+    selectedSticker = { kind: "emoji", index: next.length - 1 }
   }
 
   function addGif(url) {
@@ -52,10 +65,35 @@ Item {
     var next = gifItems.slice()
     next.push({ source: String(url), x: imageCanvas.width * 0.42, y: imageCanvas.height * 0.38, size: 112 })
     gifItems = next
+    selectedSticker = { kind: "gif", index: next.length - 1 }
   }
 
   function addCustomGif() {
-    customGifDialog.open()
+    libraryOpen = false
+    opened = false
+    fileDialogTimer.start()
+  }
+
+  function restoreFromFileDialog(path) {
+    opened = true
+    Qt.callLater(function() {
+      previewArea.forceActiveFocus()
+      if (path) root.addGif(path)
+    })
+  }
+
+  function removeSelectedSticker() {
+    if (!selectedSticker) return
+    if (selectedSticker.kind === "emoji") {
+      var emojis = emojiItems.slice()
+      emojis.splice(selectedSticker.index, 1)
+      emojiItems = emojis
+    } else {
+      var gifs = gifItems.slice()
+      gifs.splice(selectedSticker.index, 1)
+      gifItems = gifs
+    }
+    selectedSticker = null
   }
 
   function exportImage() {
@@ -96,8 +134,10 @@ Item {
     title: "Add animated sticker"
     fileMode: FileDialog.OpenFile
     nameFilters: ["Animated images (*.gif *.webp)"]
-    onAccepted: root.addGif(selectedFile)
+    onAccepted: root.restoreFromFileDialog(selectedFile)
+    onRejected: root.restoreFromFileDialog("")
   }
+  Timer { id: fileDialogTimer; interval: 180; repeat: false; onTriggered: customGifDialog.open() }
 
   Process {
     id: makeFrameDir
@@ -187,9 +227,18 @@ Item {
                 text: modelData.text
                 font.pixelSize: modelData.size
                 textFormat: Text.PlainText
+                Rectangle {
+                  anchors.fill: parent
+                  color: "transparent"
+                  border.color: Commons.Color.accent
+                  border.width: 2
+                  radius: 4
+                  visible: root.selectedSticker && root.selectedSticker.kind === "emoji" && root.selectedSticker.index === index
+                }
                 MouseArea {
                   anchors.fill: parent
                   drag.target: parent
+                  onPressed: root.selectedSticker = { kind: "emoji", index: index }
                   onWheel: function(wheel) {
                     var list = root.emojiItems.slice()
                     var item = Object.assign({}, list[index])
@@ -214,9 +263,18 @@ Item {
                 source: modelData.source
                 fillMode: Image.PreserveAspectFit
                 playing: root.opened
+                Rectangle {
+                  anchors.fill: parent
+                  color: "transparent"
+                  border.color: Commons.Color.accent
+                  border.width: 2
+                  radius: 4
+                  visible: root.selectedSticker && root.selectedSticker.kind === "gif" && root.selectedSticker.index === index
+                }
                 MouseArea {
                   anchors.fill: parent
                   drag.target: parent
+                  onPressed: root.selectedSticker = { kind: "gif", index: index }
                   onWheel: function(wheel) {
                     var list = root.gifItems.slice()
                     var item = Object.assign({}, list[index])
@@ -232,7 +290,14 @@ Item {
 
           Keys.priority: Keys.BeforeItem
           Keys.onPressed: function(event) {
-            if (event.key === Qt.Key_Escape) { root.close(); event.accepted = true }
+            if (event.key === Qt.Key_Escape) {
+              if (root.libraryOpen) root.libraryOpen = false
+              else root.close()
+              event.accepted = true
+            } else if (event.key === Qt.Key_Delete || event.key === Qt.Key_Backspace) {
+              root.removeSelectedSticker()
+              event.accepted = true
+            }
           }
           Component.onCompleted: forceActiveFocus()
         }
@@ -256,6 +321,8 @@ Item {
               onClicked: root.addGif(modelData.source)
             }
           }
+          Button { text: "Sticker library"; onClicked: { root.libraryOpen = true; previewArea.forceActiveFocus() } }
+          Button { text: "Remove"; enabled: root.selectedSticker !== null; onClicked: root.removeSelectedSticker() }
           Button { text: "Add GIF…"; onClicked: root.addCustomGif() }
           Button { text: root.exporting ? "Saving…" : "Save / Copy"; enabled: !root.exporting; onClicked: root.exportImage() }
           Text {
@@ -264,6 +331,82 @@ Item {
             opacity: 0.7
             textFormat: Text.PlainText
             anchors.verticalCenter: parent.verticalCenter
+          }
+        }
+      }
+
+      Rectangle {
+        anchors.fill: parent
+        z: 20
+        visible: root.opened && root.libraryOpen
+        color: "#99000000"
+        MouseArea { anchors.fill: parent; onClicked: root.libraryOpen = false }
+
+        Rectangle {
+          id: stickerLibrary
+          width: Math.min(parent.width - 40, 640)
+          height: Math.min(parent.height - 40, 600)
+          anchors.centerIn: parent
+          radius: Style.cornerRadius
+          color: Commons.Color.popups.background
+          border.color: Commons.Color.popups.border
+          border.width: 1
+
+          MouseArea { anchors.fill: parent; onClicked: {} }
+          Column {
+            anchors.fill: parent
+            anchors.margins: Style.space(18)
+            spacing: Style.space(10)
+            Row {
+              width: parent.width
+              Text {
+                text: "Sticker library"
+                color: Commons.Color.foreground
+                font.pixelSize: Style.font.title
+                font.weight: Font.DemiBold
+                textFormat: Text.PlainText
+                anchors.verticalCenter: parent.verticalCenter
+              }
+              Item { width: Math.max(0, parent.width - 230); height: 1 }
+              Button { text: "Close"; onClicked: root.libraryOpen = false }
+            }
+            Text { text: "Emoji"; color: Commons.Color.foreground; font.weight: Font.DemiBold; textFormat: Text.PlainText }
+            GridView {
+              id: emojiGrid
+              width: parent.width
+              height: 310
+              cellWidth: 58
+              cellHeight: 58
+              clip: true
+              model: root.emojiLibrary
+              ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+              delegate: Button {
+                required property string modelData
+                width: 48
+                height: 48
+                text: modelData
+                onClicked: { root.addEmoji(modelData); root.libraryOpen = false }
+              }
+            }
+            Text { text: "Animated GIF stickers"; color: Commons.Color.foreground; font.weight: Font.DemiBold; textFormat: Text.PlainText }
+            Row {
+              spacing: Style.space(10)
+              Repeater {
+                model: root.bundledGifs
+                delegate: Button {
+                  required property var modelData
+                  width: 72
+                  height: 72
+                  contentItem: AnimatedImage {
+                    source: modelData.source
+                    fillMode: Image.PreserveAspectFit
+                    playing: root.opened && root.libraryOpen
+                  }
+                  onClicked: { root.addGif(modelData.source); root.libraryOpen = false }
+                }
+              }
+              Button { text: "Add custom…"; onClicked: root.addCustomGif() }
+            }
           }
         }
       }
