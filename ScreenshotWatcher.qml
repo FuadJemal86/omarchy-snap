@@ -5,6 +5,7 @@ import Quickshell.Io
 Item {
   id: root
   property string home: Quickshell.env("HOME")
+  property string omarchyPath: Quickshell.env("OMARCHY_PATH") || "/usr/share/omarchy"
   property string picturesDir: home + "/Pictures"
   property string configuredDir: Quickshell.env("OMASNAP_SCREENSHOT_DIR") || Quickshell.env("OMARCHY_SCREENSHOT_DIR") || ""
   property string screenshotDir: configuredDir || picturesDir + "/Screenshots"
@@ -24,7 +25,7 @@ Item {
     path = String(path || "").trim()
     if (!isImage(path) || /\/omarchy-snap-[^/]+\.png$/i.test(path)) return
     var now = Date.now()
-    if (path === lastImage && now - lastImageTime < 2000) {
+    if (path === lastImage && now - lastImageTime < 20000) {
       if (waitForSatty === false) launchImage(path)
       return
     }
@@ -46,17 +47,17 @@ Item {
   }
 
   function launchImage(path) {
-    summon.command = ["omarchy-shell", "shell", "summon", pluginId, JSON.stringify({ image: path })]
+    summon.command = [root.omarchyPath + "/bin/omarchy-shell", "shell", "summon", pluginId, JSON.stringify({ image: path })]
     summon.running = true
   }
 
   function notifyStickers(path) {
     var payload = JSON.stringify({ image: path })
     stickerNotice.command = [
-      "omarchy-notification-send", "--app-name", "Omarchy Snap",
+      root.omarchyPath + "/bin/omarchy-notification-send", "--app-name", "Omarchy Snap",
       "Screenshot ready", "Add emojis or GIF stickers to this image.",
       "--transient", "--expire-time", "20000",
-      "--action", "Add stickers", "omarchy-shell", "shell", "summon", pluginId,
+      "--action", "Add stickers", root.omarchyPath + "/bin/omarchy-shell", "shell", "summon", pluginId,
       "--with", payload
     ]
     stickerNotice.running = true
@@ -64,7 +65,7 @@ Item {
 
   Process {
     id: watcher
-    command: ["inotifywait", "-m", "-e", "close_write,moved_to", "--format", "%w%f"].concat(root.watchDirectories)
+    command: ["inotifywait", "-m", "-e", "create,close_write,moved_to", "--format", "%w%f"].concat(root.watchDirectories)
     stdout: SplitParser {
       onRead: function(line) {
         var path = String(line).trim()
