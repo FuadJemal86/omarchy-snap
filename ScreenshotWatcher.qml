@@ -47,7 +47,7 @@ Item {
   }
 
   function launchImage(path) {
-    summon.command = ["/usr/bin/qs", "ipc", "-p", root.omarchyPath + "/shell", "call", "omarchy-snap", "open", path]
+    summon.command = ["/usr/bin/qs", "ipc", "-p", root.omarchyPath + "/shell", "call", "shell", "summon", pluginId, JSON.stringify({ image: path })]
     summon.running = true
   }
 
@@ -56,8 +56,8 @@ Item {
       root.omarchyPath + "/bin/omarchy-notification-send", "--app-name", "Omarchy Snap",
       "Screenshot ready", "Add emojis or GIF stickers to this image.",
       "--transient", "--expire-time", "20000",
-      "--action", "Add stickers", "/usr/bin/qs", "ipc", "-p", root.omarchyPath + "/shell", "call", "omarchy-snap", "open",
-      "--with", path
+      "--action", "Add stickers", "/usr/bin/qs", "ipc", "-p", root.omarchyPath + "/shell", "call", "shell", "summon", pluginId,
+      "--with", JSON.stringify({ image: path })
     ]
     stickerNotice.running = true
   }
@@ -78,6 +78,13 @@ Item {
   }
   Process { id: summon; onExited: root.notifyNext() }
   Process { id: stickerNotice; onExited: root.notifyNext() }
+  IpcHandler {
+    target: "omarchy-snap"
+    function open(path: string): string {
+      root.openImage(path, false)
+      return "opening"
+    }
+  }
   Process {
     id: triggerRead
     command: ["head", "-c", "4097", root.triggerPath]
