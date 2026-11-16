@@ -10,9 +10,7 @@ import qs.Ui
 
 // Omarchy Snap — sticker + markup editor.
 //
-// Hyprland tip: for the real background blur behind the translucent card, add
-//   layerrule = blur, omarchy-snap-stickers
-//   layerrule = ignorealpha 0.2, omarchy-snap-stickers
+// Hyprland layer rule: blur, omarchy-snap-stickers (configured in looknfeel.lua).
 //
 // Shortcuts: V select · B brush · E eraser · [ ] brush size · Ctrl+Z / Ctrl+Shift+Z undo/redo
 //            Ctrl+K sticker library · Ctrl+S export · Del remove · R / Shift+R rotate
@@ -75,7 +73,7 @@ Item {
   ]
   property var customGifs: []
   readonly property var quickEmoji: ["🔥", "👀", "✅", "❌", "💀", "🚀"]
-  readonly property var libraryCategories: ["All", "Faces", "Gestures", "Hearts", "Nature", "Fun", "Symbols", "Animated", "Custom"]
+  readonly property var libraryCategories: ["All", "Emojis", "Faces", "Gestures", "Hearts", "Nature", "Fun", "Symbols", "Animated", "Custom"]
 
   // ───────────────────────── Editor state ─────────────────────────
   property string tool: "select"          // select | draw | erase
@@ -105,8 +103,6 @@ Item {
   // ───────────────────────── Derived ─────────────────────────
   readonly property color fg: Commons.Color.foreground
   readonly property color accent: Commons.Color.accent
-  readonly property color panelBg: Commons.Color.popups.background
-  readonly property color panelBorder: Commons.Color.popups.border
   // Avoid the `onX` prefix: QML parses it as a signal handler name.
   readonly property color accentForeground: "#0b0b0c"
   readonly property int smallFontPx: 12
@@ -118,6 +114,7 @@ Item {
   readonly property real fitScale: (imgW > 0 && stage.width > 0 && stage.height > 0)
     ? Math.max(0.02, Math.min(2, Math.min((stage.width - 56) / imgW, (stage.height - 40) / imgH))) : 1
   readonly property real viewScale: fitScale * zoom
+  readonly property bool viewIsFitted: Math.abs(zoom - 1) < 0.001 && Math.abs(panX) < 0.01 && Math.abs(panY) < 0.01
   readonly property var selectedItem: {
     if (!selectedSticker) return null
     var list = selectedSticker.kind === "emoji" ? emojiItems : gifItems
@@ -271,6 +268,24 @@ Item {
     fileDialogTimer.start()
   }
 
+  function openGifLibrary() {
+    libraryCategory = "Animated"
+    libraryQuery = ""
+    searchInput.text = ""
+    libraryHover = ""
+    libraryOpen = true
+    card.forceActiveFocus()
+  }
+
+  function openEmojiLibrary() {
+    libraryCategory = "Emojis"
+    libraryQuery = ""
+    searchInput.text = ""
+    libraryHover = ""
+    libraryOpen = true
+    card.forceActiveFocus()
+  }
+
   function openImageDialog() {
     libraryOpen = false
     opened = false
@@ -365,7 +380,7 @@ Item {
     }
     for (var a = 0; a < emojiCatalog.length; a++) {
       var grp = emojiCatalog[a]
-      if (cat !== "All" && cat !== grp.cat) continue
+      if (cat !== "All" && cat !== "Emojis" && cat !== grp.cat) continue
       for (var b = 0; b < grp.list.length; b++) {
         var s = grp.list[b]
         var sp = s.indexOf(" ")
@@ -560,6 +575,10 @@ Item {
       ctx.save()
       ctx.scale(width / 24, height / 24)
       if (flip) { ctx.translate(24, 0); ctx.scale(-1, 1) }
+      ctx.shadowColor = "#99000000"
+      ctx.shadowBlur = 3
+      ctx.shadowOffsetX = 0
+      ctx.shadowOffsetY = 0
       ctx.strokeStyle = col
       ctx.fillStyle = col
       ctx.lineWidth = 1.8
@@ -629,7 +648,7 @@ Item {
     readonly property color fg: Commons.Color.foreground
     readonly property color ac: Commons.Color.accent
     readonly property bool hovered: ma.containsMouse
-    readonly property color content: primary ? "#0b0b0c"
+    readonly property color content: primary ? ac
       : (danger && hovered ? "#ff6b6b" : (active ? ac : Qt.rgba(fg.r, fg.g, fg.b, hovered ? 1 : 0.78)))
     implicitWidth: label !== "" ? contentRow.implicitWidth + 26 : 34
     implicitHeight: 34
@@ -638,14 +657,6 @@ Item {
     opacity: enabled ? 1 : 0.32
     z: hovered ? 10 : 0
 
-    Rectangle {
-      anchors.fill: parent
-      radius: 10
-      color: ib.primary ? (ma.pressed ? Qt.darker(ib.ac, 1.15) : (ib.hovered ? Qt.lighter(ib.ac, 1.08) : ib.ac))
-        : (ib.active ? Qt.rgba(ib.ac.r, ib.ac.g, ib.ac.b, 0.16)
-          : Qt.rgba(ib.fg.r, ib.fg.g, ib.fg.b, ma.pressed ? 0.14 : (ib.hovered ? 0.08 : 0)))
-      Behavior on color { ColorAnimation { duration: 120 } }
-    }
     Row {
       id: contentRow
       anchors.centerIn: parent
@@ -670,24 +681,27 @@ Item {
     }
     Timer { interval: 450; running: ib.hovered && ib.tip !== ""; onTriggered: ib.tipShown = true }
     onHoveredChanged: if (!hovered) tipShown = false
-    Rectangle {
+    Item {
       visible: opacity > 0
       opacity: ib.tipShown ? 1 : 0
       Behavior on opacity { NumberAnimation { duration: 120 } }
       z: 100
-      radius: 7
-      color: Qt.rgba(0.07, 0.07, 0.08, 0.96)
-      border.width: 1
-      border.color: Qt.rgba(ib.fg.r, ib.fg.g, ib.fg.b, 0.12)
       width: tt.implicitWidth + 16
       height: 24
       x: (ib.width - width) / 2
       y: ib.tipBelow ? ib.height + 8 : -height - 8
-      Text { id: tt; anchors.centerIn: parent; text: ib.tip; color: ib.fg; textFormat: Text.PlainText }
+      Text {
+        id: tt
+        anchors.centerIn: parent
+        text: ib.tip
+        color: ib.fg
+        font.pixelSize: Style.font.bodySmall
+        textFormat: Text.PlainText
+      }
     }
   }
 
-  component Chip: Rectangle {
+  component Chip: Item {
     id: chip
     property string label: ""
     property bool active: false
@@ -698,33 +712,17 @@ Item {
     implicitHeight: 28
     width: implicitWidth
     height: implicitHeight
-    radius: 14
     opacity: enabled ? 1 : 0.38
-    color: active ? Qt.rgba(ac.r, ac.g, ac.b, 0.18) : Qt.rgba(fg.r, fg.g, fg.b, chipMa.containsMouse ? 0.1 : 0.05)
-    border.width: 1
-    border.color: active ? Qt.rgba(ac.r, ac.g, ac.b, 0.55) : "transparent"
-    Behavior on color { ColorAnimation { duration: 120 } }
     Text {
       id: chipText
       anchors.centerIn: parent
       text: chip.label
-      color: chip.active ? chip.ac : Qt.rgba(chip.fg.r, chip.fg.g, chip.fg.b, 0.85)
+      color: chip.active ? chip.ac : Qt.rgba(chip.fg.r, chip.fg.g, chip.fg.b, chipMa.containsMouse ? 1 : 0.72)
       font.pixelSize: 12
       font.weight: Font.Medium
       textFormat: Text.PlainText
     }
     MouseArea { id: chipMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: chip.clicked() }
-  }
-
-  component Sep: Item {
-    width: 9
-    height: 34
-    Rectangle {
-      anchors.centerIn: parent
-      width: 1
-      height: 18
-      color: Qt.rgba(Commons.Color.foreground.r, Commons.Color.foreground.g, Commons.Color.foreground.b, 0.14)
-    }
   }
 
   component MiniSlider: Controls.Slider {
@@ -746,27 +744,25 @@ Item {
       height: 14
       radius: 7
       color: Commons.Color.foreground
-      border.width: sl.pressed ? 3 : 0
-      border.color: Qt.rgba(Commons.Color.accent.r, Commons.Color.accent.g, Commons.Color.accent.b, 0.5)
+      border.width: 0
       scale: sl.hovered ? 1.15 : 1
       Behavior on scale { NumberAnimation { duration: 100 } }
     }
   }
 
-  component MenuRow: Rectangle {
+  component MenuRow: Item {
     id: mr
     property string label: ""
     property string hint: ""
     property bool danger: false
     signal clicked()
     readonly property color fg: Commons.Color.foreground
+    readonly property bool hovered: mrMa.containsMouse
     width: parent ? parent.width : 180
     height: 32
-    radius: 8
-    color: mrMa.containsMouse ? Qt.rgba(fg.r, fg.g, fg.b, 0.09) : "transparent"
     Text {
       anchors.left: parent.left; anchors.leftMargin: 12; anchors.verticalCenter: parent.verticalCenter
-      text: mr.label; color: mr.danger ? "#ff6b6b" : mr.fg; font.pixelSize: 13; textFormat: Text.PlainText
+      text: mr.label; color: mr.danger ? "#ff6b6b" : Qt.rgba(mr.fg.r, mr.fg.g, mr.fg.b, mr.hovered ? 1 : 0.78); font.pixelSize: 13; textFormat: Text.PlainText
     }
     Text {
       anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter
@@ -840,30 +836,22 @@ Item {
 
     Rectangle {
       anchors.fill: parent
-      color: "#99000000"
+      color: "#1F000000"
       opacity: root.opened ? 1 : 0
-      Behavior on opacity { NumberAnimation { duration: 180 } }
+      Behavior on opacity { NumberAnimation { duration: Style.duration(180) } }
     }
 
-    // soft shadow layers
-    Rectangle { anchors.centerIn: card; width: card.width + 40; height: card.height + 40; radius: card.radius + 20; color: "#14000000"; opacity: card.opacity; scale: card.scale }
-    Rectangle { anchors.centerIn: card; width: card.width + 18; height: card.height + 18; radius: card.radius + 9; color: "#22000000"; opacity: card.opacity; scale: card.scale }
-
-    Rectangle {
+    Item {
       id: card
       readonly property real margin: parent.width < 900 ? 14 : 32
       width: Math.min(parent.width - margin * 2, 1320)
       height: Math.min(parent.height - margin * 2, 880)
       anchors.centerIn: parent
-      radius: Style.cornerRadius > 0 ? Math.max(Style.cornerRadius, 14) : 14
-      color: Qt.rgba(root.panelBg.r, root.panelBg.g, root.panelBg.b, 0.95)
-      border.color: root.panelBorder
-      border.width: 1
       focus: true
       opacity: root.opened ? 1 : 0
       scale: root.opened ? 1 : 0.97
-      Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-      Behavior on scale { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+      Behavior on opacity { NumberAnimation { duration: Style.duration(180); easing.type: Easing.OutCubic } }
+      Behavior on scale { NumberAnimation { duration: Style.duration(220); easing.type: Easing.OutCubic } }
 
       Keys.priority: Keys.AfterItem
       Keys.onPressed: function(event) {
@@ -917,11 +905,10 @@ Item {
           anchors.leftMargin: 18
           anchors.verticalCenter: parent.verticalCenter
           spacing: 11
-          Rectangle {
-            width: 30; height: 30; radius: 10
-            color: root.accent
+          Item {
+            width: 30; height: 30
             anchors.verticalCenter: parent.verticalCenter
-            Icon { anchors.centerIn: parent; name: "sticker"; col: root.accentForeground }
+            Icon { anchors.centerIn: parent; name: "sticker"; col: root.accent; width: 22; height: 22 }
           }
           Column {
             anchors.verticalCenter: parent.verticalCenter
@@ -952,19 +939,17 @@ Item {
           spacing: 4
           IconButton { icon: "image"; tip: "Open screenshot…"; tipBelow: true; onClicked: root.openImageDialog() }
           IconButton {
-            icon: "sticker"; tip: "Sticker library  ·  Ctrl+K"; tipBelow: true; active: root.libraryOpen
-            onClicked: { root.libraryOpen = !root.libraryOpen; card.forceActiveFocus() }
+            icon: "sticker"; tip: "Emoji library  ·  Ctrl+K"; tipBelow: true; active: root.libraryOpen && root.libraryCategory === "Emojis"
+            onClicked: root.openEmojiLibrary()
           }
-          Sep {}
           IconButton {
-            primary: true; icon: "export"; label: "Export"; tip: "Export  ·  Ctrl+S"; tipBelow: true
+            primary: true; icon: "export"; tip: "Export  ·  Ctrl+S"; tipBelow: true
             enabled: !root.exporting && !root.processingSticker && sourceImage.status === Image.Ready
             onClicked: root.exportImage()
           }
           IconButton { icon: "close"; danger: true; tip: "Close  ·  Esc"; tipBelow: true; onClicked: root.close() }
         }
 
-        Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: root.alphaOf(root.fg, 0.07) }
       }
 
       // ───────── Footer ─────────
@@ -1015,13 +1000,6 @@ Item {
           anchors.rightMargin: (!root.compact && libraryPanel.width > 0) ? 10 : 0
           clip: true
 
-          Rectangle {
-            anchors.fill: parent
-            radius: 14
-            color: Qt.rgba(0, 0, 0, 0.34)
-            border.width: 1
-            border.color: root.alphaOf(root.fg, 0.06)
-          }
           Canvas {
             anchors.fill: parent
             onWidthChanged: requestPaint()
@@ -1078,21 +1056,6 @@ Item {
               scale: root.viewScale
               transformOrigin: Item.Center
               visible: root.imgW > 0
-
-              Rectangle {
-                anchors.centerIn: parent
-                width: parent.width + 24 / root.viewScale
-                height: parent.height + 24 / root.viewScale
-                radius: 14 / root.viewScale
-                color: "#30000000"
-              }
-              Rectangle {
-                anchors.fill: parent
-                anchors.margins: -1 / root.viewScale
-                color: "transparent"
-                border.width: 1 / root.viewScale
-                border.color: root.alphaOf(root.fg, 0.16)
-              }
 
               // Everything inside imageCanvas is in source-image pixels and is what gets exported.
               Item {
@@ -1237,18 +1200,14 @@ Item {
           }
 
           // ── contextual strip ──
-          Rectangle {
+      Item {
             id: ctxStrip
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.bottom: toolbarPill.top
             anchors.bottomMargin: 8
             height: 46
-            radius: 15
             width: Math.min(previewArea.width - 36,
               (root.drawMode ? drawRow.implicitWidth : (root.selectedItem ? selRow.implicitWidth : quickRow.implicitWidth)) + 28)
-            color: Qt.rgba(0.06, 0.06, 0.07, 0.86)
-            border.width: 1
-            border.color: root.alphaOf(root.fg, 0.1)
             Behavior on width { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
 
             // brush / eraser
@@ -1264,9 +1223,9 @@ Item {
                   anchors.verticalCenter: parent.verticalCenter
                   width: 22; height: 22; radius: 11
                   color: modelData
-                  border.width: String(root.brushColor) === String(Qt.color(modelData)) ? 2 : 1
-                  border.color: String(root.brushColor) === String(Qt.color(modelData)) ? root.fg : root.alphaOf(root.fg, 0.25)
-                  scale: swMa.containsMouse ? 1.12 : 1
+                  border.width: 0
+                  border.color: "transparent"
+                  scale: String(root.brushColor) === String(Qt.color(modelData)) || swMa.containsMouse ? 1.12 : 1
                   Behavior on scale { NumberAnimation { duration: 100 } }
                   MouseArea { id: swMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.brushColor = modelData }
                 }
@@ -1309,24 +1268,20 @@ Item {
               Text { anchors.verticalCenter: parent.verticalCenter; rightPadding: 6; text: "Quick add"; color: root.alphaOf(root.fg, 0.55); font.pixelSize: 12; textFormat: Text.PlainText }
               Repeater {
                 model: root.quickEmoji
-                delegate: Rectangle {
+                delegate: Item {
                   required property string modelData
-                  width: 32; height: 32; radius: 9
-                  color: qMa.containsMouse ? root.alphaOf(root.fg, 0.1) : "transparent"
-                  Behavior on color { ColorAnimation { duration: 100 } }
+                  width: 32; height: 32
                   Text { anchors.centerIn: parent; text: modelData; font.pixelSize: 19; textFormat: Text.PlainText; scale: qMa.containsMouse ? 1.15 : 1; Behavior on scale { NumberAnimation { duration: 100 } } }
                   MouseArea { id: qMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.addEmoji(modelData) }
                 }
               }
               Repeater {
                 model: root.bundledGifs
-                delegate: Rectangle {
+                delegate: Item {
                   required property var modelData
-                  width: 32; height: 32; radius: 9
-                  color: gMa.containsMouse ? root.alphaOf(root.fg, 0.1) : "transparent"
-                  Behavior on color { ColorAnimation { duration: 100 } }
+                  width: 32; height: 32
                   Text { anchors.centerIn: parent; text: modelData.label; font.pixelSize: 19; textFormat: Text.PlainText }
-                  Rectangle { anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: 2; width: 6; height: 6; radius: 3; color: root.accent }
+                  Rectangle { anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: 2; width: 5; height: 5; radius: 3; color: root.accent }
                   MouseArea { id: gMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.addGif(modelData.source, false) }
                 }
               }
@@ -1334,7 +1289,7 @@ Item {
           }
 
           // ── floating toolbar ──
-          Rectangle {
+          Item {
             id: toolbarPill
             readonly property real natural: {
               var s = 0
@@ -1346,55 +1301,44 @@ Item {
             anchors.bottomMargin: 14
             width: Math.min(natural, previewArea.width - 56) + 20
             height: tbFlow.height + 16
-            radius: 16
-            color: Qt.rgba(0.06, 0.06, 0.07, 0.9)
-            border.width: 1
-            border.color: root.alphaOf(root.fg, 0.1)
 
             Flow {
               id: tbFlow
               x: 10
               y: 8
               width: toolbarPill.width - 20
-              spacing: 4
+              spacing: 7
 
               IconButton { icon: "select"; tip: "Select & move  ·  V"; active: root.tool === "select"; onClicked: root.setTool("select") }
               IconButton { icon: "brush"; tip: "Brush  ·  B"; active: root.tool === "draw"; onClicked: root.setTool("draw") }
               IconButton { icon: "eraser"; tip: "Eraser (brush strokes)  ·  E"; active: root.tool === "erase"; onClicked: root.setTool("erase") }
-              Sep {}
               IconButton { icon: "undo"; tip: "Undo  ·  Ctrl+Z"; enabled: root.undoStack.length > 0; onClicked: root.undo() }
               IconButton { icon: "undo"; flip: true; tip: "Redo  ·  Ctrl+Shift+Z"; enabled: root.redoStack.length > 0; onClicked: root.redo() }
               IconButton { icon: "trash"; danger: true; tip: "Clear canvas"; enabled: root.hasContent; onClicked: root.clearCanvas() }
-              Sep {}
-              IconButton { icon: "sticker"; tip: "Sticker library  ·  Ctrl+K"; active: root.libraryOpen; onClicked: { root.libraryOpen = !root.libraryOpen; card.forceActiveFocus() } }
-              IconButton { icon: "film"; tip: "Add GIF or MP4 clip…"; enabled: !root.processingSticker; onClicked: root.addCustomGif() }
-              Sep {}
+              IconButton { icon: "sticker"; tip: "Emoji library  ·  Ctrl+K"; active: root.libraryOpen && root.libraryCategory === "Emojis"; onClicked: root.openEmojiLibrary() }
+              IconButton { icon: "film"; tip: "GIF library"; active: root.libraryOpen && root.libraryCategory === "Animated"; enabled: !root.processingSticker; onClicked: root.openGifLibrary() }
               IconButton { icon: "zoomout"; tip: "Zoom out  ·  −"; onClicked: root.zoomBy(1 / 1.2) }
-              Rectangle {
-                width: 56; height: 34; radius: 10
-                color: zoomMa.containsMouse ? root.alphaOf(root.fg, 0.08) : "transparent"
-                Behavior on color { ColorAnimation { duration: 120 } }
-                Text { anchors.centerIn: parent; text: Math.round(root.viewScale * 100) + "%"; color: root.alphaOf(root.fg, 0.85); font.pixelSize: root.mediumFontPx; font.weight: Font.Medium; textFormat: Text.PlainText }
-                MouseArea { id: zoomMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.fitView() }
-              }
               IconButton { icon: "zoomin"; tip: "Zoom in  ·  +"; onClicked: root.zoomBy(1.2) }
-              IconButton { icon: "fit"; tip: "Fit to window  ·  0"; onClicked: root.fitView() }
+              IconButton {
+                icon: "fit"
+                active: root.viewIsFitted
+                tip: root.viewIsFitted ? "Image fitted to window  ·  0" : "Fit to window  ·  0"
+                onClicked: root.fitView()
+              }
             }
           }
 
           // conversion / busy chip
-          Rectangle {
+          Item {
             visible: root.processingSticker
             anchors.top: parent.top; anchors.horizontalCenter: parent.horizontalCenter; anchors.topMargin: 14
-            height: 30; radius: 15; width: busyText.implicitWidth + 28
-            color: Qt.rgba(0.06, 0.06, 0.07, 0.9)
-            border.width: 1; border.color: root.alphaOf(root.accent, 0.5)
+            height: 30; width: busyText.implicitWidth + 28
             Text { id: busyText; anchors.centerIn: parent; text: "Converting clip…"; color: root.accent; font.pixelSize: root.mediumFontPx; textFormat: Text.PlainText }
           }
         }
 
         // Sticker library (docked right; overlays on compact windows)
-        Rectangle {
+        Item {
           id: libraryPanel
           anchors.right: parent.right
           anchors.top: parent.top
@@ -1402,11 +1346,7 @@ Item {
           width: root.libraryOpen ? Math.min(330, body.width - (root.compact ? 0 : 160)) : 0
           visible: width > 1
           clip: true
-          radius: 14
           z: 5
-          color: Qt.rgba(0.05, 0.05, 0.06, root.compact ? 0.97 : 0.55)
-          border.width: 1
-          border.color: root.alphaOf(root.fg, 0.08)
           Behavior on width { NumberAnimation { duration: 230; easing.type: Easing.OutCubic } }
 
           Item {
@@ -1420,20 +1360,27 @@ Item {
               anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
               anchors.margins: 14
               height: 34
-              Text { anchors.verticalCenter: parent.verticalCenter; text: "Stickers"; color: root.fg; font.pixelSize: 15; font.weight: Font.DemiBold; textFormat: Text.PlainText }
+              Text { anchors.verticalCenter: parent.verticalCenter; text: root.libraryCategory === "Animated" ? "GIF library" : (root.libraryCategory === "Emojis" ? "Emoji library" : "Stickers"); color: root.fg; font.pixelSize: 15; font.weight: Font.DemiBold; textFormat: Text.PlainText }
               IconButton { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; icon: "close"; tip: "Close library"; onClicked: root.libraryOpen = false }
             }
 
-            Rectangle {
+            Item {
               id: searchBox
+              // A lightly tinted, translucent surface lets the compositor's
+              // layer blur show through while keeping the search field legible.
+              Rectangle {
+                anchors.fill: parent
+                radius: 11
+                color: root.alphaOf(root.fg, searchInput.activeFocus ? 0.14 : 0.10)
+                border.width: 1
+                border.color: searchInput.activeFocus ? root.alphaOf(root.accent, 0.48) : root.alphaOf(root.fg, 0.20)
+                Behavior on color { ColorAnimation { duration: 140 } }
+                Behavior on border.color { ColorAnimation { duration: 140 } }
+              }
               anchors.top: libHeader.bottom; anchors.topMargin: 4
               anchors.left: parent.left; anchors.right: parent.right
               anchors.leftMargin: 14; anchors.rightMargin: 14
-              height: 38; radius: 11
-              color: root.alphaOf(root.fg, searchInput.activeFocus ? 0.09 : 0.05)
-              border.width: 1
-              border.color: searchInput.activeFocus ? root.alphaOf(root.accent, 0.7) : root.alphaOf(root.fg, 0.08)
-              Behavior on color { ColorAnimation { duration: 120 } }
+              height: 38
               Icon { id: searchIcon; anchors.left: parent.left; anchors.leftMargin: 11; anchors.verticalCenter: parent.verticalCenter; name: "search"; col: root.alphaOf(root.fg, 0.55) }
               TextInput {
                 id: searchInput
@@ -1446,7 +1393,7 @@ Item {
                 selectByMouse: true
                 selectionColor: root.alphaOf(root.accent, 0.5)
                 onTextChanged: root.libraryQuery = text
-                Text { visible: !parent.text && !parent.activeFocus; text: "Search stickers"; color: root.alphaOf(root.fg, 0.4); font.pixelSize: 13; textFormat: Text.PlainText }
+                Text { visible: !parent.text && !parent.activeFocus; text: root.libraryCategory === "Animated" ? "Search GIFs" : (root.libraryCategory === "Emojis" ? "Search emojis" : "Search stickers"); color: root.alphaOf(root.fg, 0.4); font.pixelSize: 13; textFormat: Text.PlainText }
               }
               Item {
                 id: clearBtn
@@ -1493,15 +1440,10 @@ Item {
                 width: libGrid.cellWidth
                 height: libGrid.cellHeight
                 readonly property bool active: root.isActiveCell(modelData)
-                Rectangle {
+                Item {
                   anchors.fill: parent
                   anchors.margins: 3
-                  radius: 11
-                  color: cell.active ? root.alphaOf(root.accent, 0.16) : root.alphaOf(root.fg, cellMa.containsMouse ? 0.09 : 0.03)
-                  border.width: cell.active ? 1.5 : 1
-                  border.color: cell.active ? root.accent : root.alphaOf(root.fg, cellMa.containsMouse ? 0.14 : 0.04)
-                  scale: cellMa.pressed ? 0.94 : 1
-                  Behavior on color { ColorAnimation { duration: 100 } }
+                  scale: cell.active ? 1.08 : (cellMa.pressed ? 0.94 : 1)
                   Behavior on scale { NumberAnimation { duration: 90 } }
                   Text {
                     visible: cell.modelData.kind === "emoji"
@@ -1518,12 +1460,15 @@ Item {
                     fillMode: Image.PreserveAspectFit
                     playing: root.opened && root.libraryOpen
                   }
-                  Rectangle {
+                  Text {
+                    id: gifTag
                     visible: cell.modelData.kind === "gif"
                     anchors.right: parent.right; anchors.top: parent.top; anchors.margins: 4
-                    width: gifTag.implicitWidth + 6; height: 12; radius: 6
+                    text: "GIF"
                     color: root.accent
-                    Text { id: gifTag; anchors.centerIn: parent; text: "GIF"; color: root.accentForeground; font.pixelSize: root.tinyFontPx; font.weight: Font.Bold; textFormat: Text.PlainText }
+                    font.pixelSize: root.tinyFontPx
+                    font.weight: Font.Bold
+                    textFormat: Text.PlainText
                   }
                   MouseArea {
                     id: cellMa
@@ -1556,7 +1501,6 @@ Item {
               anchors.left: parent.left; anchors.right: parent.right
               anchors.margins: 14
               height: 44
-              Rectangle { anchors.top: parent.top; width: parent.width; height: 1; color: root.alphaOf(root.fg, 0.07) }
               Text {
                 anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
                 width: parent.width - 140
@@ -1580,7 +1524,7 @@ Item {
         acceptedButtons: Qt.AllButtons
         onPressed: root.ctxMenu = null
       }
-      Rectangle {
+      Item {
         id: ctxMenuBox
         z: 41
         visible: root.ctxMenu !== null
@@ -1589,10 +1533,6 @@ Item {
         height: menuCol.implicitHeight + 12
         x: root.ctxMenu ? Math.min(root.ctxMenu.x, card.width - width - 10) : 0
         y: root.ctxMenu ? Math.min(root.ctxMenu.y, card.height - height - 10) : 0
-        radius: 12
-        color: Qt.rgba(0.07, 0.07, 0.08, 0.97)
-        border.width: 1
-        border.color: root.alphaOf(root.fg, 0.12)
         Column {
           id: menuCol
           anchors.fill: parent
@@ -1605,32 +1545,25 @@ Item {
             label: "Reset rotation"
             onClicked: { root.ctxMenu = null; if (root.selectedSticker) { root.commit(); root.updateSticker(root.selectedSticker.kind, root.selectedSticker.index, { rotation: 0 }) } }
           }
-          Rectangle { width: parent.width; height: 1; color: root.alphaOf(root.fg, 0.08) }
           MenuRow { label: "Remove"; hint: "Del"; danger: true; onClicked: { root.ctxMenu = null; root.removeSelectedSticker() } }
         }
       }
 
       // ───────── Export dialog ─────────
-      Rectangle {
+      Item {
         id: exportScrim
         anchors.fill: parent
-        radius: card.radius
         z: 50
         visible: opacity > 0
         opacity: root.exportDialogOpen ? 1 : 0
-        color: "#B3000000"
         Behavior on opacity { NumberAnimation { duration: 160 } }
         MouseArea { anchors.fill: parent; onClicked: if (!root.exporting) root.exportDialogOpen = false }
 
-        Rectangle {
+        Item {
           id: dlg
           anchors.centerIn: parent
           width: Math.min(parent.width - 32, 460)
           height: dlgCol.implicitHeight + 40
-          radius: 16
-          color: Qt.rgba(0.07, 0.07, 0.08, 0.99)
-          border.width: 1
-          border.color: root.alphaOf(root.fg, 0.12)
           scale: root.exportDialogOpen ? 1 : 0.95
           Behavior on scale { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
           MouseArea { anchors.fill: parent }
@@ -1670,10 +1603,8 @@ Item {
               width: parent.width
               spacing: 4
               Text { text: "Saves to"; color: root.alphaOf(root.fg, 0.5); font.pixelSize: root.smallFontPx; textFormat: Text.PlainText }
-              Rectangle {
-                width: parent.width; height: 34; radius: 9
-                color: root.alphaOf(root.fg, 0.05)
-                border.width: 1; border.color: root.alphaOf(root.fg, 0.07)
+              Item {
+                width: parent.width; height: 34
                 Text {
                   anchors.fill: parent; anchors.leftMargin: 11; anchors.rightMargin: 11
                   verticalAlignment: Text.AlignVCenter
@@ -1691,11 +1622,10 @@ Item {
               width: parent.width
               spacing: 8
               visible: root.exportState !== "idle"
-              Rectangle {
-                width: parent.width; height: 6; radius: 3
-                color: root.alphaOf(root.fg, 0.1)
+              Item {
+                width: parent.width; height: 2
                 Rectangle {
-                  height: parent.height; radius: 3
+                  height: parent.height; radius: 1
                   width: parent.width * root.exportProgress
                   color: root.exportState === "error" ? "#ff6b6b" : (root.exportState === "done" ? "#5bd68a" : root.accent)
                   Behavior on width { NumberAnimation { duration: 120 } }
