@@ -20,24 +20,41 @@ Item {
     return String(path || "").length <= 4096 && /^\/.+\.png$/i.test(String(path || ""))
   }
 
-  function openImage(path) {
+  function openImage(path, waitForSatty) {
     path = String(path || "").trim()
     if (!isImage(path) || /\/omarchy-snap-[^/]+\.png$/i.test(path)) return
     var now = Date.now()
-    if (path === lastImage && now - lastImageTime < 2000) return
+    if (path === lastImage && now - lastImageTime < 2000) {
+      if (waitForSatty === false && sattyCheck.imagePath === path) {
+        sattyWait.stop()
+        sattyCheck.imagePath = ""
+        pendingImages = pendingImages.filter(function(item) { return item.path !== path })
+        launchImage(path)
+      }
+      return
+    }
     lastImage = path
     lastImageTime = now
     var next = pendingImages.slice()
-    next.push(path)
+    next.push({ path: path, waitForSatty: waitForSatty !== false })
     pendingImages = next
     summonNext()
   }
 
   function summonNext() {
-    if (summon.running || pendingImages.length === 0) return
+    if (summon.running || sattyCheck.running || sattyCheck.imagePath || pendingImages.length === 0) return
     var next = pendingImages.slice()
-    var path = next.shift()
+    var item = next.shift()
     pendingImages = next
+    if (item.waitForSatty) {
+      sattyCheck.imagePath = item.path
+      sattyCheck.running = true
+    } else {
+      launchImage(item.path)
+    }
+  }
+
+  function launchImage(path) {
     summon.command = ["omarchy-shell", "shell", "summon", pluginId, JSON.stringify({ image: path })]
     summon.running = true
   }
@@ -58,6 +75,26 @@ Item {
   }
   Process { id: summon; onExited: root.summonNext() }
   Process {
+    id: sattyCheck
+    property string imagePath: ""
+    command: ["pgrep", "-x", "satty"]
+    onExited: function(exitCode) {
+      if (!imagePath) { root.summonNext(); return }
+      if (exitCode === 0) sattyWait.start()
+      else {
+        var path = imagePath
+        imagePath = ""
+        root.launchImage(path)
+      }
+    }
+  }
+  Timer {
+    id: sattyWait
+    interval: 500
+    repeat: false
+    onTriggered: if (sattyCheck.imagePath && !sattyCheck.running) sattyCheck.running = true
+  }
+  Process {
     id: triggerRead
     command: ["head", "-c", "4097", root.triggerPath]
     stdout: StdioCollector {
@@ -68,7 +105,7 @@ Item {
   IpcHandler {
     target: "omarchy-snap"
     function open(path: string): string {
-      root.openImage(path)
+      root.openImage(path, false)
       return "opening"
     }
   }
