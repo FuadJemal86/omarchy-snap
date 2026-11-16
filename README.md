@@ -1,8 +1,83 @@
 # Omarchy Snap
 
-Omarchy Snap adds emoji and animated GIF stickers to the screenshot workflow. Omasnap continues to handle capture, region selection, and drawing. Enable the plugin with `omarchy plugin enable io.github.fuad.omarchy-snap`; the service watches `~/Pictures/Screenshots`, `~/Pictures`, any `OMASNAP_SCREENSHOT_DIR` or `OMARCHY_SCREENSHOT_DIR` override, and `/tmp/omarchy-snap-open.txt` for new PNG captures or hook triggers. A new screenshot shows an **Add stickers** notification button; clicking it opens that image in the overlay.
+Omarchy Snap adds emoji and animated GIF stickers to the Omarchy screenshot workflow. After taking a screenshot, click **Add stickers** in its notification to open the editor.
 
-The overlay includes six quick emoji stamps, a larger sticker library, bundled animated GIFs from `assets/`, and an **Add GIF…** picker for local `.gif`, `.webp`, and `.mp4` files. MP4 clips are converted to looping GIF stickers (up to four seconds) with ffmpeg. The editor hides while the native file picker is open and returns when you choose a file or cancel. Drag stickers to position them, use the mouse wheel to resize, then select one and choose **Remove** (or press Delete). Escape closes the overlay. Save / Copy writes a PNG when there are no GIF stickers, or captures 2.5 seconds of frames and uses ffmpeg to make a looping GIF when there are.
+## Install
 
-Runtime tools: `inotifywait` from `inotify-tools`, `head`, `ffmpeg`, and `wl-copy` from `wl-clipboard`. Run `./setup-screenshot-hook.sh` to install an executable `~/.config/omarchy/hooks/screenshot`; call it through `omarchy hook screenshot /path/to/saved-image.png` after saving. Direct IPC testing uses `qs ipc -p "$OMARCHY_PATH/shell" call omarchy-snap open /path/to/image.png`.
-# omarchy-snap
+Omarchy Snap is installed directly from [FuadJemal86/omarchy-snap](https://github.com/FuadJemal86/omarchy-snap). Copy and paste these commands into a terminal:
+
+```bash
+# Install the runtime tools used for watching screenshots, animated exports, and clipboard copy.
+omarchy pkg add inotify-tools ffmpeg wl-clipboard
+
+# Clone, validate, and enable Omarchy Snap.
+omarchy plugin add https://github.com/FuadJemal86/omarchy-snap.git --enable --yes
+```
+
+Confirm that it is installed and enabled:
+
+```bash
+omarchy plugin list
+```
+
+The plugin ID is `io.github.fuad.omarchy-snap`. If it is listed but disabled, enable it with:
+
+```bash
+omarchy plugin enable io.github.fuad.omarchy-snap
+```
+
+## Use
+
+1. Take a screenshot with your normal Omarchy screenshot shortcut or `omarchy capture screenshot`.
+2. Click **Add stickers** in the screenshot notification.
+3. Add emoji or GIF stickers, drag them into place, and use the wheel to resize a selected sticker.
+4. Use the brush or eraser for markup. The **Fit to window** button (or `0`) recenters and restores the automatic image scale.
+5. Choose **Save / Copy** to export. Static edits export as PNG; edits containing GIF stickers can export as an animated GIF or MP4.
+
+The watcher detects PNG screenshots in `~/Pictures/Screenshots`, `~/Pictures`, and any directory specified through `OMASNAP_SCREENSHOT_DIR` or `OMARCHY_SCREENSHOT_DIR`.
+
+## Optional Screenshot Hook
+
+If your own screenshot script saves an image outside those directories, install the included hook after adding the plugin:
+
+```bash
+cd ~/.config/omarchy/plugins/io.github.fuad.omarchy-snap
+./setup-screenshot-hook.sh
+```
+
+The installer protects an existing `~/.config/omarchy/hooks/screenshot` hook and stops instead of replacing it. From your screenshot script, call the hook after saving a PNG:
+
+```bash
+omarchy hook screenshot /path/to/saved-image.png
+```
+
+## Update or Remove
+
+```bash
+# Get the latest version from GitHub.
+omarchy plugin update io.github.fuad.omarchy-snap --yes
+
+# Disable and remove the plugin.
+omarchy plugin remove io.github.fuad.omarchy-snap --yes
+```
+
+## Features
+
+- Quick emoji stamps and a searchable emoji library.
+- Bundled and local `.gif` / `.webp` stickers, plus `.mp4` clips converted to looping GIFs up to four seconds long.
+- Sticker drag, resize, rotation, duplication, undo/redo, drawing, and erasing.
+- PNG, animated GIF, and MP4 export.
+
+## Troubleshooting
+
+Restart the Omarchy shell if the plugin does not appear after installation:
+
+```bash
+omarchy restart shell
+```
+
+For direct IPC testing, open an existing PNG in the editor with:
+
+```bash
+qs ipc -p "$OMARCHY_PATH/shell" call omarchy-snap open /path/to/image.png
+```
