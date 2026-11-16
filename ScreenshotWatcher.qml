@@ -57,7 +57,7 @@ Item {
       "Screenshot ready", "Add emojis or GIF stickers to this image.",
       "--transient", "--expire-time", "20000",
       "--action", "Add stickers", "/usr/bin/qs", "ipc", "-p", root.omarchyPath + "/shell", "call", "shell", "summon", pluginId,
-      "--with", JSON.stringify({ image: path })
+      JSON.stringify({ image: path })
     ]
     stickerNotice.running = true
   }
