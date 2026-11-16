@@ -15,7 +15,10 @@ Item {
   property string outputDir: Quickshell.env("HOME") + "/Pictures/Screenshots"
   property var emojiItems: []
   property var gifItems: []
-  property var bundledGifs: [Qt.resolvedUrl("assets/sparkle.gif"), Qt.resolvedUrl("assets/party.gif")]
+  property var bundledGifs: [
+    { label: "✨", source: Qt.resolvedUrl("assets/sparkle.gif") },
+    { label: "🎉", source: Qt.resolvedUrl("assets/party.gif") }
+  ]
   property bool exporting: false
   property int framesWritten: 0
   property string captureDir: "/tmp/omarchy-snap-" + Qt.createUuid().toString().replace(/[{}-]/g, "")
@@ -27,6 +30,7 @@ Item {
     try { payload = JSON.parse(String(payloadJson || "{}")) } catch (e) { payload = {} }
     var path = String(payload.image || "")
     if (!path || path.length > 4096) return
+    if (opened && imagePath === path) return
     imagePath = path
     emojiItems = []
     gifItems = []
@@ -146,43 +150,14 @@ Item {
             textFormat: Text.PlainText
             anchors.verticalCenter: parent.verticalCenter
           }
-          Item { width: Math.max(0, parent.width - 425); height: 1 }
-          Button { text: "Add GIF…"; onClicked: root.addCustomGif() }
-          Button { text: root.exporting ? "Exporting…" : "Save & Copy"; enabled: !root.exporting; onClicked: root.exportImage() }
+          Item { width: Math.max(0, parent.width - 170); height: 1 }
           Button { text: "×"; onClicked: root.close() }
-        }
-
-        Row {
-          spacing: 5
-          Repeater {
-            model: ["🔥", "👀", "✅", "❌", "💀", "🚀"]
-            delegate: Button {
-              required property string modelData
-              text: modelData
-              onClicked: root.addEmoji(modelData)
-            }
-          }
-          Repeater {
-            model: root.bundledGifs
-            delegate: Button {
-              required property var modelData
-              text: "GIF"
-              onClicked: root.addGif(modelData)
-            }
-          }
-          Text {
-            text: "Esc to close · drag to move · scroll to resize"
-            color: Commons.Color.foreground
-            opacity: 0.7
-            textFormat: Text.PlainText
-            anchors.verticalCenter: parent.verticalCenter
-          }
         }
 
         Item {
           id: previewArea
           width: parent.width
-          height: parent.height - 78
+          height: parent.height - 138
           clip: true
           Rectangle { anchors.fill: parent; color: "#151515"; radius: 8 }
 
@@ -260,6 +235,36 @@ Item {
             if (event.key === Qt.Key_Escape) { root.close(); event.accepted = true }
           }
           Component.onCompleted: forceActiveFocus()
+        }
+
+        Row {
+          width: parent.width
+          spacing: 5
+          Repeater {
+            model: ["🔥", "👀", "✅", "❌", "💀", "🚀"]
+            delegate: Button {
+              required property string modelData
+              text: modelData
+              onClicked: root.addEmoji(modelData)
+            }
+          }
+          Repeater {
+            model: root.bundledGifs
+            delegate: Button {
+              required property var modelData
+              text: modelData.label
+              onClicked: root.addGif(modelData.source)
+            }
+          }
+          Button { text: "Add GIF…"; onClicked: root.addCustomGif() }
+          Button { text: root.exporting ? "Saving…" : "Save / Copy"; enabled: !root.exporting; onClicked: root.exportImage() }
+          Text {
+            text: "Drag stickers · scroll to resize · Esc closes"
+            color: Commons.Color.foreground
+            opacity: 0.7
+            textFormat: Text.PlainText
+            anchors.verticalCenter: parent.verticalCenter
+          }
         }
       }
     }

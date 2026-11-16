@@ -8,9 +8,13 @@ fi
 
 image_path=$(realpath -e -- "$1")
 case "${image_path,,}" in
-  *.png|*.jpg|*.jpeg|*.webp|*.bmp) ;;
+  *.png) ;;
   *) echo "Unsupported screenshot format" >&2; exit 2 ;;
 esac
 
-payload=$(python -c 'import json, sys; print(json.dumps({"image": sys.argv[1]}))' "$image_path")
-exec omarchy-shell shell summon io.github.fuad.omarchy-snap "$payload"
+trigger_file=/tmp/omarchy-snap-open.txt
+trigger_tmp=$(mktemp /tmp/omarchy-snap-open.XXXXXX)
+trap 'rm -f -- "$trigger_tmp"' EXIT
+printf '%s\n' "$image_path" > "$trigger_tmp"
+mv -fT -- "$trigger_tmp" "$trigger_file"
+trap - EXIT
