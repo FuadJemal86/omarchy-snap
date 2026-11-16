@@ -47,7 +47,7 @@ Item {
   }
 
   function launchImage(path) {
-    summon.command = [root.omarchyPath + "/bin/omarchy-shell", "shell", "summon", pluginId, JSON.stringify({ image: path })]
+    summon.command = ["/usr/bin/qs", "ipc", "-p", root.omarchyPath + "/shell", "call", "omarchy-snap", "open", path]
     summon.running = true
   }
 
@@ -57,7 +57,7 @@ Item {
       root.omarchyPath + "/bin/omarchy-notification-send", "--app-name", "Omarchy Snap",
       "Screenshot ready", "Add emojis or GIF stickers to this image.",
       "--transient", "--expire-time", "20000",
-      "--action", "Add stickers", root.omarchyPath + "/bin/omarchy-shell", "shell", "summon", pluginId,
+      "--action", "Add stickers", "/usr/bin/qs", "ipc", "-p", root.omarchyPath + "/shell", "call", "omarchy-snap", "open",
       "--with", payload
     ]
     stickerNotice.running = true
@@ -85,13 +85,6 @@ Item {
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: root.openImage(String(text || ""))
-    }
-  }
-  IpcHandler {
-    target: "omarchy-snap"
-    function open(path: string): string {
-      root.openImage(path, false)
-      return "opening"
     }
   }
   Timer {

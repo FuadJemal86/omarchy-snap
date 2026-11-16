@@ -50,6 +50,14 @@ Item {
     Qt.callLater(function() { previewArea.forceActiveFocus() })
   }
 
+  IpcHandler {
+    target: "omarchy-snap"
+    function open(path: string): string {
+      root.open(JSON.stringify({ image: path }))
+      return root.opened ? "opened" : "invalid image path"
+    }
+  }
+
   function close() { opened = false; exporting = false }
 
   function addEmoji(value) {
