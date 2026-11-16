@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Controls as Controls
 import QtQuick.Dialogs
 import Quickshell
 import Quickshell.Io
@@ -31,7 +32,7 @@ Item {
   ]
   property bool exporting: false
   property int framesWritten: 0
-  property string captureDir: "/tmp/omarchy-snap-" + Qt.createUuid().toString().replace(/[{}-]/g, "")
+  property string captureDir: "/tmp/omarchy-snap-" + Date.now() + "-" + Math.floor(Math.random() * 1000000000)
   property string gifOutputPath: ""
   readonly property bool hasAnimatedStickers: gifItems.length > 0
 
@@ -141,7 +142,7 @@ Item {
 
   Process {
     id: makeFrameDir
-    command: ["mkdir", "-p", root.captureDir]
+    command: ["mkdir", "-p", root.captureDir, root.outputDir]
     onExited: function(code) { if (code === 0) root.captureFrame(); else root.exporting = false }
   }
   Process {
@@ -393,10 +394,16 @@ Item {
               spacing: Style.space(10)
               Repeater {
                 model: root.bundledGifs
-                delegate: Button {
+                delegate: Controls.Button {
                   required property var modelData
                   width: 72
                   height: 72
+                  background: Rectangle {
+                    radius: Style.cornerRadius
+                    color: Commons.Color.popups.background
+                    border.color: Commons.Color.popups.border
+                    border.width: 1
+                  }
                   contentItem: AnimatedImage {
                     source: modelData.source
                     fillMode: Image.PreserveAspectFit
