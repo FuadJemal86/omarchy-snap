@@ -52,13 +52,12 @@ Item {
   }
 
   function notifyStickers(path) {
-    var payload = JSON.stringify({ image: path })
     stickerNotice.command = [
       root.omarchyPath + "/bin/omarchy-notification-send", "--app-name", "Omarchy Snap",
       "Screenshot ready", "Add emojis or GIF stickers to this image.",
       "--transient", "--expire-time", "20000",
       "--action", "Add stickers", "/usr/bin/qs", "ipc", "-p", root.omarchyPath + "/shell", "call", "omarchy-snap", "open",
-      "--with", payload
+      "--with", path
     ]
     stickerNotice.running = true
   }
