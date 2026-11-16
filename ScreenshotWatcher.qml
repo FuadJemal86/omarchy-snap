@@ -25,38 +25,41 @@ Item {
     if (!isImage(path) || /\/omarchy-snap-[^/]+\.png$/i.test(path)) return
     var now = Date.now()
     if (path === lastImage && now - lastImageTime < 2000) {
-      if (waitForSatty === false && sattyCheck.imagePath === path) {
-        sattyWait.stop()
-        sattyCheck.imagePath = ""
-        pendingImages = pendingImages.filter(function(item) { return item.path !== path })
-        launchImage(path)
-      }
+      if (waitForSatty === false) launchImage(path)
       return
     }
     lastImage = path
     lastImageTime = now
+    if (waitForSatty === false) { launchImage(path); return }
     var next = pendingImages.slice()
-    next.push({ path: path, waitForSatty: waitForSatty !== false })
+    next.push(path)
     pendingImages = next
-    summonNext()
+    notifyNext()
   }
 
-  function summonNext() {
-    if (summon.running || sattyCheck.running || sattyCheck.imagePath || pendingImages.length === 0) return
+  function notifyNext() {
+    if (stickerNotice.running || pendingImages.length === 0) return
     var next = pendingImages.slice()
-    var item = next.shift()
+    var path = next.shift()
     pendingImages = next
-    if (item.waitForSatty) {
-      sattyCheck.imagePath = item.path
-      sattyCheck.running = true
-    } else {
-      launchImage(item.path)
-    }
+    notifyStickers(path)
   }
 
   function launchImage(path) {
     summon.command = ["omarchy-shell", "shell", "summon", pluginId, JSON.stringify({ image: path })]
     summon.running = true
+  }
+
+  function notifyStickers(path) {
+    var payload = JSON.stringify({ image: path })
+    stickerNotice.command = [
+      "omarchy-notification-send", "--app-name", "Omarchy Snap",
+      "Screenshot ready", "Add emojis or GIF stickers to this image.",
+      "--transient", "--expire-time", "20000",
+      "--action", "Add stickers", "omarchy-shell", "shell", "summon", pluginId,
+      "--with", payload
+    ]
+    stickerNotice.running = true
   }
 
   Process {
@@ -73,27 +76,8 @@ Item {
       if (exitCode !== 0) restartTimer.start()
     }
   }
-  Process { id: summon; onExited: root.summonNext() }
-  Process {
-    id: sattyCheck
-    property string imagePath: ""
-    command: ["pgrep", "-x", "satty"]
-    onExited: function(exitCode) {
-      if (!imagePath) { root.summonNext(); return }
-      if (exitCode === 0) sattyWait.start()
-      else {
-        var path = imagePath
-        imagePath = ""
-        root.launchImage(path)
-      }
-    }
-  }
-  Timer {
-    id: sattyWait
-    interval: 500
-    repeat: false
-    onTriggered: if (sattyCheck.imagePath && !sattyCheck.running) sattyCheck.running = true
-  }
+  Process { id: summon; onExited: root.notifyNext() }
+  Process { id: stickerNotice; onExited: root.notifyNext() }
   Process {
     id: triggerRead
     command: ["head", "-c", "4097", root.triggerPath]
