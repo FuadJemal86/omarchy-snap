@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.fuad.omarchy-snap",
+  "name": "Omarchy Snap",
+  "version": "1.0.0",
+  "author": "Fuad Jemal",
+  "description": "Add static emoji and animated GIF stickers to Omarchy screenshots.",
+  "kinds": ["service", "overlay"],
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "ScreenshotWatcher.qml",
+    "overlay": "EditorOverlay.qml"
+  }
+}
