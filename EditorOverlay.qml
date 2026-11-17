@@ -893,10 +893,19 @@ Item {
       if (wheel.modifiers & Qt.AltModifier) {
         props.rotation = ((it.rotation || 0) + (d > 0 ? 5 : -5)) % 360
       } else {
-        var ns = Math.max(h.minSize, Math.min(Math.max(200, h.app.imgW), it.size * (d > 0 ? 1.08 : 1 / 1.08)))
+        // Keep the whole sticker within the image canvas. GIF stickers are square,
+        // so limiting against the shorter image dimension avoids growing them
+        // beyond the canvas height on wide screenshots.
+        var maxSize = Math.max(h.minSize, Math.min(h.app.imgW, h.app.imgH))
+        var ns = Math.max(h.minSize, Math.min(maxSize, it.size * (d > 0 ? 1.08 : 1 / 1.08)))
         props.size = ns
-        props.x = h.parent.x - (ns - it.size) / 2
-        props.y = h.parent.y - (ns - it.size) / 2
+        var scaleFactor = ns / it.size
+        var nextWidth = h.parent.width * scaleFactor
+        var nextHeight = h.parent.height * scaleFactor
+        // Preserve the sticker's center while resizing, then keep its bounds
+        // inside the screenshot so it cannot be clipped out of view.
+        props.x = Math.max(0, Math.min(h.app.imgW - nextWidth, h.parent.x - (nextWidth - h.parent.width) / 2))
+        props.y = Math.max(0, Math.min(h.app.imgH - nextHeight, h.parent.y - (nextHeight - h.parent.height) / 2))
       }
       h.app.updateSticker(h.kind, h.idx, props)
       wheel.accepted = true
