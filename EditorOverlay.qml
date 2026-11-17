@@ -430,6 +430,14 @@ Item {
     cleanup.running = true
   }
 
+  function copyExport() {
+    if (!lastOutputPath || copyExportProc.running) return
+    var mimeType = exportFormat === "png" ? "image/png" : (exportFormat === "gif" ? "image/gif" : "video/mp4")
+    exportMessage = "Copying exported file…"
+    copyExportProc.command = ["bash", "-lc", "wl-copy --type " + mimeType + " < " + Util.shellQuote(lastOutputPath)]
+    copyExportProc.running = true
+  }
+
   function grabSize() { return Qt.size(Math.max(2, Math.round(imgW * exportScale)), Math.max(2, Math.round(imgH * exportScale))) }
 
   function savePng() {
@@ -546,6 +554,12 @@ Item {
   Process {
     id: copyPathProc
     command: ["bash", "-lc", "printf %s " + Util.shellQuote(root.lastOutputPath) + " | wl-copy"]
+  }
+  Process {
+    id: copyExportProc
+    onExited: function(code) {
+      root.exportMessage = code === 0 ? "Export copied to clipboard." : "Could not copy the exported file to the clipboard."
+    }
   }
   Process {
     id: openFolderProc
@@ -1665,6 +1679,12 @@ Item {
                 IconButton {
                   visible: root.exportState === "working"
                   enabled: false; label: "Exporting…"
+                }
+                IconButton {
+                  visible: root.exportState === "done"
+                  enabled: !copyExportProc.running
+                  icon: "copy"; label: copyExportProc.running ? "Copying…" : "Copy file"; tip: "Copy exported file"
+                  onClicked: root.copyExport()
                 }
                 IconButton {
                   visible: root.exportState === "done"
