@@ -111,8 +111,7 @@ Item {
   property string exportMessage: ""
   property real exportProgress: 0
   property string lastOutputPath: ""
-  property real exportScale: 1
-  property real exportQuality: 85
+  property real exportQuality: 100
 
   // ───────────────────────── Derived ─────────────────────────
   readonly property color fg: Commons.Color.foreground
@@ -465,12 +464,10 @@ Item {
     var base = outputDir + "/omarchy-snap-" + Date.now()
     lastOutputPath = base + "." + exportFormat
     gifOutputPath = lastOutputPath
-    exportScale = exportFormat === "png" ? 1 : Math.min(1, 1280 / Math.max(imgW, imgH))
     var quality = Math.max(50, Math.min(100, Math.round(exportQuality)))
-    var gifColors = Math.round(64 + (quality - 50) * 3.84)
-    var mp4Crf = Math.round(35 - (quality - 50) * 0.34)
-    encodeGif.command = ["ffmpeg", "-y", "-framerate", "15", "-i", captureDir + "/frame-%03d.png", "-loop", "0", "-vf", "split[s0][s1];[s0]palettegen=max_colors=" + gifColors + "[p];[s1][p]paletteuse", gifOutputPath]
-    encodeMp4.command = ["ffmpeg", "-y", "-framerate", "15", "-i", captureDir + "/frame-%03d.png", "-c:v", "libx264", "-crf", String(mp4Crf), "-pix_fmt", "yuv420p", "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2", "-movflags", "+faststart", lastOutputPath]
+    var mp4Crf = Math.round(24 - (quality - 50) * 0.28)
+    encodeGif.command = ["ffmpeg", "-y", "-framerate", "15", "-i", captureDir + "/frame-%03d.png", "-loop", "0", "-vf", "split[s0][s1];[s0]palettegen=max_colors=256:stats_mode=full[p];[s1][p]paletteuse=dither=sierra2_4a", gifOutputPath]
+    encodeMp4.command = ["ffmpeg", "-y", "-framerate", "15", "-i", captureDir + "/frame-%03d.png", "-c:v", "libx264", "-preset", "slow", "-crf", String(mp4Crf), "-pix_fmt", "yuv444p", "-movflags", "+faststart", lastOutputPath]
     makeFrameDir.running = true
   }
 
@@ -489,7 +486,7 @@ Item {
     copyExportProc.running = true
   }
 
-  function grabSize() { return Qt.size(Math.max(2, Math.round(imgW * exportScale)), Math.max(2, Math.round(imgH * exportScale))) }
+  function grabSize() { return Qt.size(Math.max(2, Math.round(imgW)), Math.max(2, Math.round(imgH))) }
 
   function savePng() {
     exportMessage = "Rendering image…"
@@ -556,7 +553,7 @@ Item {
   }
   Process {
     id: videoToGif
-    command: ["ffmpeg", "-y", "-i", root.pendingVideoPath, "-t", "4", "-an", "-vf", "fps=15,scale=320:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse", "-loop", "0", root.convertedVideoGifPath]
+    command: ["ffmpeg", "-y", "-i", root.pendingVideoPath, "-t", "4", "-an", "-vf", "fps=15,split[s0][s1];[s0]palettegen=max_colors=256:stats_mode=full[p];[s1][p]paletteuse=dither=sierra2_4a", "-loop", "0", root.convertedVideoGifPath]
     onExited: function(code) {
       root.processingSticker = false
       if (code === 0) root.addGif(root.convertedVideoGifPath, true)
@@ -565,7 +562,7 @@ Item {
   }
   Process {
     id: encodeGif
-    command: ["ffmpeg", "-y", "-framerate", "15", "-i", root.captureDir + "/frame-%03d.png", "-loop", "0", "-vf", "split[s0][s1];[s0]palettegen=max_colors=192[p];[s1][p]paletteuse", root.gifOutputPath]
+    command: ["ffmpeg", "-y", "-framerate", "15", "-i", root.captureDir + "/frame-%03d.png", "-loop", "0", "-vf", "split[s0][s1];[s0]palettegen=max_colors=256:stats_mode=full[p];[s1][p]paletteuse=dither=sierra2_4a", root.gifOutputPath]
     onExited: function(code) {
       if (code === 0) {
         root.exportProgress = 0.92
@@ -577,7 +574,7 @@ Item {
   }
   Process {
     id: encodeMp4
-    command: ["ffmpeg", "-y", "-framerate", "15", "-i", root.captureDir + "/frame-%03d.png", "-c:v", "libx264", "-crf", "23", "-pix_fmt", "yuv420p", "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2", "-movflags", "+faststart", root.lastOutputPath]
+    command: ["ffmpeg", "-y", "-framerate", "15", "-i", root.captureDir + "/frame-%03d.png", "-c:v", "libx264", "-preset", "slow", "-crf", "10", "-pix_fmt", "yuv444p", "-movflags", "+faststart", root.lastOutputPath]
     onExited: function(code) {
       if (code === 0) {
         root.exportProgress = 0.92
@@ -1148,7 +1145,7 @@ Item {
                   source: root.imagePath ? Util.fileUrl(root.imagePath) : ""
                   asynchronous: true
                   cache: false
-                  mipmap: true
+                  mipmap: false
                   fillMode: Image.PreserveAspectFit
                 }
 
@@ -1659,8 +1656,8 @@ Item {
                 width: parent.width; wrapMode: Text.WordWrap
                 color: root.alphaOf(root.fg, 0.72); font.pixelSize: 12; textFormat: Text.PlainText
                 text: (root.exportFormat === "png" ? "Still image at full resolution. Saved and copied to the clipboard."
-                  : root.exportFormat === "gif" ? "Animated GIF, up to 1280 px. Saved and copied to the clipboard."
-                  : "H.264 video, up to 1280 px. Saved to disk and the file path is copied.")
+                  : root.exportFormat === "gif" ? "Animated GIF at the original dimensions with a 256-color palette. Saved and copied to the clipboard."
+                  : "H.264 video at the original dimensions with high visual quality. Saved to disk and the file path is copied.")
                   + (root.hasAnimatedStickers ? "" : " Add an animated sticker to unlock GIF and MP4.")
               }
 
