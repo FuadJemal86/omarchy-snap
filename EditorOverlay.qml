@@ -116,6 +116,11 @@ Item {
   // ───────────────────────── Derived ─────────────────────────
   readonly property color fg: Commons.Color.foreground
   readonly property color accent: Commons.Color.accent
+  readonly property color glassSurface: Qt.rgba(0.035, 0.04, 0.045, 0.52)
+  property string tooltipText: ""
+  property real tooltipX: 0
+  property real tooltipY: 0
+  property bool tooltipBelow: false
   // Avoid the `onX` prefix: QML parses it as a signal handler name.
   readonly property color accentForeground: "#0b0b0c"
   readonly property int smallFontPx: 12
@@ -139,6 +144,15 @@ Item {
   readonly property string fileName: imagePath ? imagePath.split("/").pop() : ""
 
   function alphaOf(c, v) { return Qt.rgba(c.r, c.g, c.b, v) }
+  function showTooltip(button) {
+    if (!button.tip) return
+    var point = button.mapToItem(window, button.width / 2, button.tipBelow ? button.height + 8 : -8)
+    tooltipText = button.tip
+    tooltipX = point.x
+    tooltipY = point.y
+    tooltipBelow = button.tipBelow
+  }
+  function hideTooltip() { tooltipText = "" }
   function recordGifLoad(source, status) {
     if (!source) return
     var next = Object.assign({}, gifLoadStatus)
@@ -170,7 +184,7 @@ Item {
     Qt.callLater(function() { card.forceActiveFocus() })
   }
 
-  function close() { opened = false; exporting = false; exportDialogOpen = false; ctxMenu = null }
+  function close() { opened = false; exporting = false; exportDialogOpen = false; ctxMenu = null; hideTooltip() }
 
   function escapePressed() {
     if (ctxMenu) ctxMenu = null
@@ -713,7 +727,6 @@ Item {
     property bool primary: false
     property bool danger: false
     property bool tipBelow: false
-    property bool tipShown: false
     signal clicked()
     readonly property color fg: Commons.Color.foreground
     readonly property color ac: Commons.Color.accent
@@ -733,8 +746,7 @@ Item {
       anchors.fill: parent
       radius: 10
       color: ib.active ? Qt.rgba(ib.ac.r, ib.ac.g, ib.ac.b, 0.13)
-        : (ib.hovered ? Qt.rgba(ib.fg.r, ib.fg.g, ib.fg.b, 0.10)
-          : Qt.rgba(ib.fg.r, ib.fg.g, ib.fg.b, 0.025))
+        : (ib.hovered ? Qt.rgba(ib.fg.r, ib.fg.g, ib.fg.b, 0.10) : root.glassSurface)
       border.width: 1
       border.color: ib.active ? Qt.rgba(ib.ac.r, ib.ac.g, ib.ac.b, 0.32)
         : Qt.rgba(ib.fg.r, ib.fg.g, ib.fg.b, ib.hovered ? 0.18 : 0.065)
@@ -764,26 +776,8 @@ Item {
       cursorShape: Qt.PointingHandCursor
       onClicked: ib.clicked()
     }
-    Timer { interval: 450; running: ib.hovered && ib.tip !== ""; onTriggered: ib.tipShown = true }
-    onHoveredChanged: if (!hovered) tipShown = false
-    Item {
-      visible: opacity > 0
-      opacity: ib.tipShown ? 1 : 0
-      Behavior on opacity { NumberAnimation { duration: 120 } }
-      z: 100
-      width: tt.implicitWidth + 16
-      height: 24
-      x: (ib.width - width) / 2
-      y: ib.tipBelow ? ib.height + 8 : -height - 8
-      Text {
-        id: tt
-        anchors.centerIn: parent
-        text: ib.tip
-        color: ib.fg
-        font.pixelSize: Style.font.bodySmall
-        textFormat: Text.PlainText
-      }
-    }
+    Timer { interval: 450; running: ib.hovered && ib.tip !== ""; onTriggered: root.showTooltip(ib) }
+    onHoveredChanged: if (!hovered) root.hideTooltip()
   }
 
   component Chip: Item {
@@ -1301,7 +1295,7 @@ Item {
             Rectangle {
               anchors.fill: parent
               radius: 16
-              color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.065)
+              color: root.glassSurface
               border.width: 1
               border.color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.14)
             }
@@ -1400,7 +1394,7 @@ Item {
             Rectangle {
               anchors.fill: parent
               radius: 18
-              color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.045)
+              color: root.glassSurface
               border.width: 1
               border.color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.12)
               Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top; height: 1; radius: 1; color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.12) }
@@ -1453,8 +1447,16 @@ Item {
           z: 5
           Behavior on width { NumberAnimation { duration: 230; easing.type: Easing.OutCubic } }
 
+          Rectangle {
+            anchors.fill: parent
+            color: root.glassSurface
+            border.width: 1
+            border.color: root.alphaOf(root.fg, 0.13)
+            Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top; height: 1; radius: 1; color: root.alphaOf(root.fg, 0.16) }
+          }
+
           Item {
-            width: 330
+            width: parent.width
             anchors.right: parent.right
             anchors.top: parent.top
             anchors.bottom: parent.bottom
@@ -1475,7 +1477,7 @@ Item {
               Rectangle {
                 anchors.fill: parent
                 radius: 11
-                color: root.alphaOf(root.fg, searchInput.activeFocus ? 0.10 : 0.045)
+                color: searchInput.activeFocus ? root.alphaOf(root.accent, 0.10) : root.glassSurface
                 border.width: 1
                 border.color: searchInput.activeFocus ? root.alphaOf(root.accent, 0.38) : root.alphaOf(root.fg, 0.12)
                 Behavior on color { ColorAnimation { duration: 140 } }
@@ -1662,22 +1664,24 @@ Item {
       // ───────── Docked export panel ─────────
       Item {
         id: exportPanel
-        anchors.top: body.top; anchors.bottom: body.bottom; anchors.right: body.right
-        width: root.exportDialogOpen ? Math.min(300, body.width - 24) : 0
+        anchors.top: body.top; anchors.topMargin: 40; anchors.right: body.right
+        width: root.exportDialogOpen ? Math.min(330, body.width - (root.compact ? 0 : 160)) : 0
+        height: dlgCol.implicitHeight + 32
         visible: width > 1; clip: true; z: 30
         Behavior on width { NumberAnimation { duration: 230; easing.type: Easing.OutCubic } }
+        Behavior on height { NumberAnimation { duration: Style.duration(200); easing.type: Easing.OutCubic } }
 
         Rectangle {
           anchors.fill: parent; radius: 18
-          color: root.alphaOf(root.fg, 0.055)
+          color: root.glassSurface
           border.width: 1; border.color: root.alphaOf(root.fg, 0.13)
           Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top; height: 1; radius: 1; color: root.alphaOf(root.fg, 0.16) }
         }
         Item {
-          width: 300; anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom
+          width: parent.width; anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom
           Column {
             id: dlgCol
-            anchors.fill: parent; anchors.margins: 16; spacing: 14
+            anchors.fill: parent; anchors.margins: 14; spacing: 14
 
             Item {
               width: parent.width; height: 36
@@ -1746,28 +1750,65 @@ Item {
             }
 
             Item {
-              width: parent.width; height: 38
-              Row { anchors.left: parent.left; anchors.right: parent.right; spacing: 6
+              width: parent.width; height: actionFlow.implicitHeight
+              Flow { id: actionFlow; anchors.left: parent.left; anchors.right: parent.right; spacing: 6
                 IconButton {
                   visible: root.exportState === "idle" || root.exportState === "error"
                   width: 76
+                  tip: root.exportState === "error" ? "Close export options" : "Cancel export"
                   label: root.exportState === "error" ? "Close" : "Cancel"
                   onClicked: root.exportDialogOpen = false
                 }
                 IconButton {
                   visible: root.exportState === "idle" || root.exportState === "error"
                   width: parent.width - 82; primary: true; icon: "export"
+                  tip: root.exportState === "error" ? "Retry export" : "Export image"
                   label: root.exportState === "error" ? "Retry export" : "Export"
                   onClicked: root.startExport()
                 }
-                IconButton { visible: root.exportState === "working"; enabled: false; label: "Exporting…" }
-                IconButton { visible: root.exportState === "done"; enabled: !copyExportProc.running; icon: "copy"; label: copyExportProc.running ? "Copying…" : "Copy file"; onClicked: root.copyExport() }
-                IconButton { visible: root.exportState === "done"; icon: "copy"; label: "Copy path"; onClicked: copyPathProc.running = true }
-                IconButton { visible: root.exportState === "done"; icon: "folder"; label: "Open folder"; onClicked: openFolderProc.running = true }
-                IconButton { visible: root.exportState === "done"; primary: true; label: "Done"; onClicked: root.close() }
+                IconButton { visible: root.exportState === "working"; enabled: false; tip: root.exportMessage; label: "Exporting…" }
+                IconButton { visible: root.exportState === "done"; enabled: !copyExportProc.running; icon: "copy"; tip: "Copy exported file"; label: copyExportProc.running ? "Copying…" : "Copy file"; onClicked: root.copyExport() }
+                IconButton { visible: root.exportState === "done"; icon: "copy"; tip: "Copy file path"; label: "Copy path"; onClicked: copyPathProc.running = true }
+                IconButton { visible: root.exportState === "done"; icon: "folder"; tip: "Open save folder"; label: "Open folder"; onClicked: openFolderProc.running = true }
+                IconButton { visible: root.exportState === "done"; primary: true; tip: "Close Omarchy Snap"; label: "Done"; onClicked: root.close() }
               }
             }
           }
+        }
+      }
+    }
+
+    Item {
+      id: tooltipLayer
+      anchors.fill: parent
+      z: 1000
+      enabled: false
+
+      Item {
+        id: tooltipBubble
+        width: tooltipLabel.implicitWidth + 18
+        height: tooltipLabel.implicitHeight + 12
+        x: Math.max(8, Math.min(parent.width - width - 8, root.tooltipX - width / 2))
+        y: Math.max(8, Math.min(parent.height - height - 8, root.tooltipBelow ? root.tooltipY : root.tooltipY - height))
+        opacity: root.tooltipText !== "" ? 1 : 0
+        visible: opacity > 0
+        Behavior on opacity { NumberAnimation { duration: Style.duration(130); easing.type: Easing.OutCubic } }
+        z: 1001
+
+        Rectangle {
+          anchors.fill: parent
+          radius: 8
+          color: root.glassSurface
+          border.width: 1
+          border.color: root.alphaOf(root.fg, 0.16)
+        }
+        Text {
+          id: tooltipLabel
+          anchors.centerIn: parent
+          text: root.tooltipText
+          color: root.fg
+          font.pixelSize: Style.font.bodySmall
+          textFormat: Text.PlainText
         }
       }
     }
