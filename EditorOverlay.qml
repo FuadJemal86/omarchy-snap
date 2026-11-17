@@ -1664,27 +1664,27 @@ Item {
       // ───────── Docked export panel ─────────
       Item {
         id: exportPanel
-        anchors.top: body.top; anchors.topMargin: 40; anchors.right: body.right
+        anchors.top: body.top; anchors.bottom: body.bottom; anchors.right: body.right
         width: root.exportDialogOpen ? Math.min(330, body.width - (root.compact ? 0 : 160)) : 0
-        height: dlgCol.implicitHeight + 32
         visible: width > 1; clip: true; z: 30
         Behavior on width { NumberAnimation { duration: 230; easing.type: Easing.OutCubic } }
-        Behavior on height { NumberAnimation { duration: Style.duration(200); easing.type: Easing.OutCubic } }
 
         Rectangle {
-          anchors.fill: parent; radius: 18
+          anchors.fill: parent
+          radius: 1
           color: root.glassSurface
-          border.width: 1; border.color: root.alphaOf(root.fg, 0.13)
-          Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top; height: 1; radius: 1; color: root.alphaOf(root.fg, 0.16) }
+          border.width: 1
+          border.color: root.alphaOf(root.fg, 0.13)
+          Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top; height: 1; color: root.alphaOf(root.fg, 0.16) }
         }
         Item {
-          width: parent.width; anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom
+          anchors.fill: parent
           Column {
             id: dlgCol
             anchors.fill: parent; anchors.margins: 14; spacing: 14
 
             Item {
-              width: parent.width; height: 36
+              width: parent.width; height: 34
               Text { anchors.verticalCenter: parent.verticalCenter; text: "Export"; color: root.fg; font.pixelSize: 16; font.weight: Font.DemiBold; textFormat: Text.PlainText }
               IconButton { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; icon: "close"; tip: "Close export panel"; enabled: !root.exporting; onClicked: root.exportDialogOpen = false }
             }
