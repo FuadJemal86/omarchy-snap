@@ -34,6 +34,18 @@ Item {
   property string pendingVideoPath: ""
   property string convertedVideoGifPath: ""
   readonly property bool hasAnimatedStickers: gifItems.length > 0
+  property var gifLoadStatus: ({})
+  property double gifLoadWaitStarted: 0
+  readonly property bool animatedStickersReady: {
+    for (var i = 0; i < gifItems.length; i++)
+      if (gifLoadStatus[gifItems[i].source] !== Image.Ready) return false
+    return true
+  }
+  readonly property bool animatedStickerLoadFailed: {
+    for (var i = 0; i < gifItems.length; i++)
+      if (gifLoadStatus[gifItems[i].source] === Image.Error) return true
+    return false
+  }
 
   // ───────────────────────── Sticker catalogue ─────────────────────────
   property var emojiCatalog: [
@@ -126,6 +138,12 @@ Item {
   readonly property string fileName: imagePath ? imagePath.split("/").pop() : ""
 
   function alphaOf(c, v) { return Qt.rgba(c.r, c.g, c.b, v) }
+  function recordGifLoad(source, status) {
+    if (!source) return
+    var next = Object.assign({}, gifLoadStatus)
+    next[String(source)] = status
+    gifLoadStatus = next
+  }
 
   // ───────────────────────── Lifecycle ─────────────────────────
   function open(payloadJson) {
@@ -410,6 +428,15 @@ Item {
   function startExport() {
     if (exporting || sourceImage.status !== Image.Ready) return
     if (exportFormat !== "png" && !hasAnimatedStickers) exportFormat = "png"
+    if (exportFormat !== "png" && !animatedStickersReady) {
+      if (animatedStickerLoadFailed) { exportState = "error"; exportMessage = "An animated sticker could not be loaded."; return }
+      if (!gifLoadWaitStarted) gifLoadWaitStarted = Date.now()
+      exportState = "working"
+      exportMessage = "Loading animated stickers…"
+      gifLoadTimer.start()
+      return
+    }
+    gifLoadWaitStarted = 0
     exporting = true
     selectedSticker = null
     exportState = "working"
@@ -570,6 +597,26 @@ Item {
     command: ["rm", "-rf", root.captureDir]
   }
   Timer { id: frameTimer; interval: 67; repeat: false; onTriggered: root.captureFrame() }
+  Timer {
+    id: gifLoadTimer
+    interval: 100
+    repeat: true
+    onTriggered: {
+      if (!root.exportDialogOpen) { stop(); root.gifLoadWaitStarted = 0; return }
+      if (root.animatedStickerLoadFailed) {
+        stop(); root.gifLoadWaitStarted = 0
+        root.exportState = "error"
+        root.exportMessage = "An animated sticker could not be loaded."
+      } else if (root.animatedStickersReady) {
+        stop(); root.gifLoadWaitStarted = 0
+        root.startExport()
+      } else if (Date.now() - root.gifLoadWaitStarted > 15000) {
+        stop(); root.gifLoadWaitStarted = 0
+        root.exportState = "error"
+        root.exportMessage = "Timed out while loading an animated sticker."
+      }
+    }
+  }
 
   // ───────────────────────── Inline components ─────────────────────────
   component Icon: Canvas {
@@ -670,6 +717,21 @@ Item {
     height: implicitHeight
     opacity: enabled ? 1 : 0.32
     z: hovered ? 10 : 0
+
+    // The overlay layer blur comes from Hyprland; this low-opacity surface
+    // keeps every icon control legible while allowing that blur to show through.
+    Rectangle {
+      anchors.fill: parent
+      radius: 10
+      color: ib.active ? Qt.rgba(ib.ac.r, ib.ac.g, ib.ac.b, 0.17)
+        : (ib.hovered ? Qt.rgba(ib.fg.r, ib.fg.g, ib.fg.b, 0.12)
+          : Qt.rgba(ib.fg.r, ib.fg.g, ib.fg.b, 0.055))
+      border.width: 1
+      border.color: ib.active ? Qt.rgba(ib.ac.r, ib.ac.g, ib.ac.b, 0.32)
+        : Qt.rgba(ib.fg.r, ib.fg.g, ib.fg.b, ib.hovered ? 0.22 : 0.10)
+      Behavior on color { ColorAnimation { duration: Style.duration(120) } }
+      Behavior on border.color { ColorAnimation { duration: Style.duration(120) } }
+    }
 
     Row {
       id: contentRow
@@ -1154,7 +1216,13 @@ Item {
                     rotation: modelData.rotation || 0
                     source: modelData.source
                     fillMode: Image.PreserveAspectFit
+                    asynchronous: true
+                    smooth: true
                     playing: root.opened
+                    onStatusChanged: {
+                      root.recordGifLoad(source, status)
+                      if (status === Image.Error) console.warn("Omarchy Snap: could not load animated sticker " + source)
+                    }
                     Rectangle {
                       anchors.fill: parent
                       color: "transparent"
@@ -1224,6 +1292,14 @@ Item {
               (root.drawMode ? drawRow.implicitWidth : (root.selectedItem ? selRow.implicitWidth : quickRow.implicitWidth)) + 28)
             Behavior on width { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
 
+            Rectangle {
+              anchors.fill: parent
+              radius: 16
+              color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.065)
+              border.width: 1
+              border.color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.14)
+            }
+
             // brush / eraser
             Row {
               id: drawRow
@@ -1279,7 +1355,6 @@ Item {
               visible: !root.drawMode && root.selectedItem === null
               anchors.centerIn: parent
               spacing: 4
-              Text { anchors.verticalCenter: parent.verticalCenter; rightPadding: 6; text: "Quick add"; color: root.alphaOf(root.fg, 0.55); font.pixelSize: 12; textFormat: Text.PlainText }
               Repeater {
                 model: root.quickEmoji
                 delegate: Item {
@@ -1315,6 +1390,14 @@ Item {
             anchors.bottomMargin: 14
             width: Math.min(natural, previewArea.width - 56) + 20
             height: tbFlow.height + 16
+
+            Rectangle {
+              anchors.fill: parent
+              radius: 18
+              color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.075)
+              border.width: 1
+              border.color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.16)
+            }
 
             Flow {
               id: tbFlow
@@ -1472,7 +1555,13 @@ Item {
                     anchors.margins: 8
                     source: cell.modelData.kind === "gif" ? cell.modelData.source : ""
                     fillMode: Image.PreserveAspectFit
+                    asynchronous: true
+                    smooth: true
                     playing: root.opened && root.libraryOpen
+                    onStatusChanged: {
+                      root.recordGifLoad(source, status)
+                      if (status === Image.Error) console.warn("Omarchy Snap: could not load animated sticker " + source)
+                    }
                   }
                   Text {
                     id: gifTag
@@ -1524,7 +1613,7 @@ Item {
                 font.pixelSize: 12
                 textFormat: Text.PlainText
               }
-              IconButton { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; icon: "film"; label: "Add GIF…"; tip: "Add a GIF, WebP or MP4 clip"; enabled: !root.processingSticker; onClicked: root.addCustomGif() }
+              IconButton { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; icon: "film"; tip: "Add a GIF, WebP or MP4 clip"; enabled: !root.processingSticker; onClicked: root.addCustomGif() }
             }
           }
         }
