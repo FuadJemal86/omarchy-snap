@@ -1391,6 +1391,7 @@ Item {
             anchors.bottomMargin: 14
             width: Math.min(natural, previewArea.width - 56) + 20
             height: tbFlow.height + 16
+            clip: true
 
             Rectangle {
               anchors.fill: parent
@@ -1398,7 +1399,7 @@ Item {
               color: root.glassSurface
               border.width: 1
               border.color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.12)
-              Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top; height: 1; radius: 1; color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.12) }
+              Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.leftMargin: 18; anchors.rightMargin: 18; anchors.top: parent.top; height: 1; radius: 1; color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.12) }
             }
 
             Flow {
