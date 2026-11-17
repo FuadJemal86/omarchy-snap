@@ -758,8 +758,8 @@ Item {
     Row {
       id: contentRow
       anchors.centerIn: parent
-      spacing: 7
-      Icon { anchors.verticalCenter: parent.verticalCenter; name: ib.icon; flip: ib.flip; col: ib.content }
+      spacing: ib.icon !== "" && ib.label !== "" ? 7 : 0
+      Icon { visible: ib.icon !== ""; anchors.verticalCenter: parent.verticalCenter; name: ib.icon; flip: ib.flip; col: ib.content }
       Text {
         visible: ib.label !== ""
         anchors.verticalCenter: parent.verticalCenter
@@ -1441,12 +1441,13 @@ Item {
           id: sidebarPanel
           anchors.right: parent.right
           anchors.top: parent.top
-          anchors.bottom: parent.bottom
+          height: root.sidebarMode === "export" ? Math.min(parent.height, dlgCol.implicitHeight + 28) : parent.height
           width: root.sidebarMode !== "closed" ? Math.min(330, body.width - (root.compact ? 0 : 160)) : 0
           visible: width > 1
           clip: true
           z: 5
           Behavior on width { NumberAnimation { duration: 230; easing.type: Easing.OutCubic } }
+          Behavior on height { NumberAnimation { duration: Style.duration(200); easing.type: Easing.OutCubic } }
 
           Rectangle {
             anchors.fill: parent
