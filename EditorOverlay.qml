@@ -483,9 +483,9 @@ Item {
 
   function copyExport() {
     if (!lastOutputPath || copyExportProc.running) return
-    var mimeType = exportFormat === "png" ? "image/png" : (exportFormat === "gif" ? "image/gif" : "video/mp4")
     exportMessage = "Copying exported file…"
-    copyExportProc.command = ["bash", "-lc", "wl-copy --type " + mimeType + " < " + Util.shellQuote(lastOutputPath)]
+    var fileUri = Util.fileUrl(lastOutputPath)
+    copyExportProc.command = ["bash", "-lc", "printf '%s\\r\\n' " + Util.shellQuote(fileUri) + " | wl-copy --type text/uri-list"]
     copyExportProc.running = true
   }
 
