@@ -103,7 +103,7 @@ Item {
   property string libraryHover: ""
   property real lastCoalesce: 0
 
-  // export dialog
+  // Right-docked export panel
   property bool exportDialogOpen: false
   property string exportFormat: "png"     // png | gif | mp4
   property string exportState: "idle"     // idle | working | done | error
@@ -111,6 +111,7 @@ Item {
   property real exportProgress: 0
   property string lastOutputPath: ""
   property real exportScale: 1
+  property real exportQuality: 85
 
   // ───────────────────────── Derived ─────────────────────────
   readonly property color fg: Commons.Color.foreground
@@ -287,6 +288,7 @@ Item {
   }
 
   function openGifLibrary() {
+    exportDialogOpen = false
     libraryCategory = "Animated"
     libraryQuery = ""
     searchInput.text = ""
@@ -296,6 +298,7 @@ Item {
   }
 
   function openEmojiLibrary() {
+    exportDialogOpen = false
     libraryCategory = "Emojis"
     libraryQuery = ""
     searchInput.text = ""
@@ -418,6 +421,7 @@ Item {
   // ───────────────────────── Export ─────────────────────────
   function exportImage() {
     if (exporting || !opened || sourceImage.status !== Image.Ready) return
+    libraryOpen = false
     exportFormat = hasAnimatedStickers ? "gif" : "png"
     exportState = "idle"
     exportMessage = ""
@@ -447,6 +451,11 @@ Item {
     lastOutputPath = base + "." + exportFormat
     gifOutputPath = lastOutputPath
     exportScale = exportFormat === "png" ? 1 : Math.min(1, 1280 / Math.max(imgW, imgH))
+    var quality = Math.max(50, Math.min(100, Math.round(exportQuality)))
+    var gifColors = Math.round(64 + (quality - 50) * 3.84)
+    var mp4Crf = Math.round(35 - (quality - 50) * 0.34)
+    encodeGif.command = ["ffmpeg", "-y", "-framerate", "15", "-i", captureDir + "/frame-%03d.png", "-loop", "0", "-vf", "split[s0][s1];[s0]palettegen=max_colors=" + gifColors + "[p];[s1][p]paletteuse", gifOutputPath]
+    encodeMp4.command = ["ffmpeg", "-y", "-framerate", "15", "-i", captureDir + "/frame-%03d.png", "-c:v", "libx264", "-crf", String(mp4Crf), "-pix_fmt", "yuv420p", "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2", "-movflags", "+faststart", lastOutputPath]
     makeFrameDir.running = true
   }
 
@@ -541,7 +550,7 @@ Item {
   }
   Process {
     id: encodeGif
-    command: ["ffmpeg", "-y", "-framerate", "15", "-i", root.captureDir + "/frame-%03d.png", "-loop", "0", "-vf", "split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse", root.gifOutputPath]
+    command: ["ffmpeg", "-y", "-framerate", "15", "-i", root.captureDir + "/frame-%03d.png", "-loop", "0", "-vf", "split[s0][s1];[s0]palettegen=max_colors=192[p];[s1][p]paletteuse", root.gifOutputPath]
     onExited: function(code) {
       if (code === 0) {
         root.exportProgress = 0.92
@@ -553,7 +562,7 @@ Item {
   }
   Process {
     id: encodeMp4
-    command: ["ffmpeg", "-y", "-framerate", "15", "-i", root.captureDir + "/frame-%03d.png", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2", "-movflags", "+faststart", root.lastOutputPath]
+    command: ["ffmpeg", "-y", "-framerate", "15", "-i", root.captureDir + "/frame-%03d.png", "-c:v", "libx264", "-crf", "23", "-pix_fmt", "yuv420p", "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2", "-movflags", "+faststart", root.lastOutputPath]
     onExited: function(code) {
       if (code === 0) {
         root.exportProgress = 0.92
@@ -723,12 +732,12 @@ Item {
     Rectangle {
       anchors.fill: parent
       radius: 10
-      color: ib.active ? Qt.rgba(ib.ac.r, ib.ac.g, ib.ac.b, 0.17)
-        : (ib.hovered ? Qt.rgba(ib.fg.r, ib.fg.g, ib.fg.b, 0.12)
-          : Qt.rgba(ib.fg.r, ib.fg.g, ib.fg.b, 0.055))
+      color: ib.active ? Qt.rgba(ib.ac.r, ib.ac.g, ib.ac.b, 0.13)
+        : (ib.hovered ? Qt.rgba(ib.fg.r, ib.fg.g, ib.fg.b, 0.10)
+          : Qt.rgba(ib.fg.r, ib.fg.g, ib.fg.b, 0.025))
       border.width: 1
       border.color: ib.active ? Qt.rgba(ib.ac.r, ib.ac.g, ib.ac.b, 0.32)
-        : Qt.rgba(ib.fg.r, ib.fg.g, ib.fg.b, ib.hovered ? 0.22 : 0.10)
+        : Qt.rgba(ib.fg.r, ib.fg.g, ib.fg.b, ib.hovered ? 0.18 : 0.065)
       Behavior on color { ColorAnimation { duration: Style.duration(120) } }
       Behavior on border.color { ColorAnimation { duration: Style.duration(120) } }
     }
@@ -935,11 +944,8 @@ Item {
         var shift = event.modifiers & Qt.ShiftModifier
         if (event.key === Qt.Key_Escape) { root.escapePressed(); event.accepted = true; return }
         if (searchInput.activeFocus) return
-        if (root.exportDialogOpen) {
-          if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && (root.exportState === "idle" || root.exportState === "error")) root.startExport()
-          event.accepted = true
-          return
-        }
+        if (root.exportDialogOpen && (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
+            && (root.exportState === "idle" || root.exportState === "error")) { root.startExport(); event.accepted = true; return }
         if (ctrl) {
           if (event.key === Qt.Key_Z) { if (shift) root.redo(); else root.undo() }
           else if (event.key === Qt.Key_Y) root.redo()
@@ -1072,8 +1078,8 @@ Item {
           anchors.left: parent.left
           anchors.top: parent.top
           anchors.bottom: parent.bottom
-          anchors.right: root.compact ? parent.right : libraryPanel.left
-          anchors.rightMargin: (!root.compact && libraryPanel.width > 0) ? 10 : 0
+          anchors.right: root.exportDialogOpen && !root.compact ? exportPanel.left : (root.compact ? parent.right : libraryPanel.left)
+          anchors.rightMargin: root.exportDialogOpen && !root.compact ? 10 : ((!root.compact && libraryPanel.width > 0) ? 10 : 0)
           clip: true
 
           Canvas {
@@ -1394,9 +1400,10 @@ Item {
             Rectangle {
               anchors.fill: parent
               radius: 18
-              color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.075)
+              color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.045)
               border.width: 1
-              border.color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.16)
+              border.color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.12)
+              Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top; height: 1; radius: 1; color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.12) }
             }
 
             Flow {
@@ -1468,9 +1475,9 @@ Item {
               Rectangle {
                 anchors.fill: parent
                 radius: 11
-                color: root.alphaOf(root.fg, searchInput.activeFocus ? 0.14 : 0.10)
+                color: root.alphaOf(root.fg, searchInput.activeFocus ? 0.10 : 0.045)
                 border.width: 1
-                border.color: searchInput.activeFocus ? root.alphaOf(root.accent, 0.48) : root.alphaOf(root.fg, 0.20)
+                border.color: searchInput.activeFocus ? root.alphaOf(root.accent, 0.38) : root.alphaOf(root.fg, 0.12)
                 Behavior on color { ColorAnimation { duration: 140 } }
                 Behavior on border.color { ColorAnimation { duration: 140 } }
               }
@@ -1652,144 +1659,112 @@ Item {
         }
       }
 
-      // ───────── Export dialog ─────────
+      // ───────── Docked export panel ─────────
       Item {
-        id: exportScrim
-        anchors.fill: parent
-        z: 50
-        visible: opacity > 0
-        opacity: root.exportDialogOpen ? 1 : 0
-        Behavior on opacity { NumberAnimation { duration: 160 } }
-        MouseArea { anchors.fill: parent; onClicked: if (!root.exporting) root.exportDialogOpen = false }
+        id: exportPanel
+        anchors.top: body.top; anchors.bottom: body.bottom; anchors.right: body.right
+        width: root.exportDialogOpen ? Math.min(300, body.width - 24) : 0
+        visible: width > 1; clip: true; z: 30
+        Behavior on width { NumberAnimation { duration: 230; easing.type: Easing.OutCubic } }
 
+        Rectangle {
+          anchors.fill: parent; radius: 18
+          color: root.alphaOf(root.fg, 0.055)
+          border.width: 1; border.color: root.alphaOf(root.fg, 0.13)
+          Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top; height: 1; radius: 1; color: root.alphaOf(root.fg, 0.16) }
+        }
         Item {
-          id: dlg
-          anchors.centerIn: parent
-          width: Math.min(parent.width - 32, 460)
-          height: dlgCol.implicitHeight + 40
-          scale: root.exportDialogOpen ? 1 : 0.95
-          Behavior on scale { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
-          MouseArea { anchors.fill: parent }
-
+          width: 300; anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom
           Column {
             id: dlgCol
-            anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-            anchors.margins: 20
-            spacing: 14
+            anchors.fill: parent; anchors.margins: 16; spacing: 14
 
             Item {
-              width: parent.width; height: 30
-              Text { anchors.verticalCenter: parent.verticalCenter; text: "Export"; color: root.fg; font.pixelSize: 17; font.weight: Font.DemiBold; textFormat: Text.PlainText }
-              IconButton { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; icon: "close"; enabled: !root.exporting; onClicked: root.exportDialogOpen = false }
+              width: parent.width; height: 36
+              Text { anchors.verticalCenter: parent.verticalCenter; text: "Export"; color: root.fg; font.pixelSize: 16; font.weight: Font.DemiBold; textFormat: Text.PlainText }
+              IconButton { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; icon: "close"; tip: "Close export panel"; enabled: !root.exporting; onClicked: root.exportDialogOpen = false }
             }
 
-            Row {
-              spacing: 8
-              Chip { label: "PNG"; active: root.exportFormat === "png"; enabled: !root.exporting; onClicked: root.exportFormat = "png" }
-              Chip { label: "GIF"; active: root.exportFormat === "gif"; enabled: !root.exporting && root.hasAnimatedStickers; onClicked: root.exportFormat = "gif" }
-              Chip { label: "MP4"; active: root.exportFormat === "mp4"; enabled: !root.exporting && root.hasAnimatedStickers; onClicked: root.exportFormat = "mp4" }
+            Column { width: parent.width; spacing: 8
+              Text { text: "FORMAT"; color: root.alphaOf(root.fg, 0.5); font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1.1; textFormat: Text.PlainText }
+              Row { spacing: 7
+                Chip { label: "PNG"; active: root.exportFormat === "png"; enabled: !root.exporting; onClicked: root.exportFormat = "png" }
+                Chip { label: "GIF"; active: root.exportFormat === "gif"; enabled: !root.exporting && root.hasAnimatedStickers; onClicked: root.exportFormat = "gif" }
+                Chip { label: "MP4"; active: root.exportFormat === "mp4"; enabled: !root.exporting && root.hasAnimatedStickers; onClicked: root.exportFormat = "mp4" }
+              }
             }
 
             Text {
-              width: parent.width
-              wrapMode: Text.WordWrap
-              color: root.alphaOf(root.fg, 0.62)
-              font.pixelSize: 13
-              textFormat: Text.PlainText
-              text: (root.exportFormat === "png" ? "Still image at full resolution. Saved to disk and copied to the clipboard."
-                : root.exportFormat === "gif" ? "Animated GIF, up to 1280 px wide. Saved to disk and copied to the clipboard."
-                : "H.264 video, up to 1280 px wide. Saved to disk and the file path is copied.")
-                + (root.hasAnimatedStickers ? "" : "  Add an animated sticker to unlock GIF and MP4.")
+              width: parent.width; wrapMode: Text.WordWrap
+              color: root.alphaOf(root.fg, 0.62); font.pixelSize: 12; textFormat: Text.PlainText
+              text: (root.exportFormat === "png" ? "Still image at full resolution. Saved and copied to the clipboard."
+                : root.exportFormat === "gif" ? "Animated GIF, up to 1280 px. Saved and copied to the clipboard."
+                : "H.264 video, up to 1280 px. Saved to disk and the file path is copied.")
+                + (root.hasAnimatedStickers ? "" : " Add an animated sticker to unlock GIF and MP4.")
             }
 
-            Column {
-              width: parent.width
-              spacing: 4
-              Text { text: "Saves to"; color: root.alphaOf(root.fg, 0.5); font.pixelSize: root.smallFontPx; textFormat: Text.PlainText }
-              Item {
-                width: parent.width; height: 34
+            Column { width: parent.width; spacing: 8
+              Row { width: parent.width
+                Text { text: "QUALITY"; color: root.alphaOf(root.fg, 0.5); font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1.1; textFormat: Text.PlainText }
+                Text { anchors.right: parent.right; text: root.exportFormat === "png" ? "Lossless" : (Math.round(root.exportQuality) + "%"); color: root.exportFormat === "png" ? root.alphaOf(root.fg, 0.55) : root.accent; font.pixelSize: 11; textFormat: Text.PlainText }
+              }
+              MiniSlider { width: parent.width; from: 50; to: 100; value: root.exportQuality; enabled: !root.exporting && root.exportFormat !== "png"; onMoved: root.exportQuality = value; onValueChanged: if (!pressed) root.exportQuality = value }
+              Text { width: parent.width; wrapMode: Text.WordWrap; text: root.exportFormat === "png" ? "PNG keeps full resolution with lossless quality." : "Higher quality preserves more detail and creates larger files."; color: root.alphaOf(root.fg, 0.48); font.pixelSize: 11; textFormat: Text.PlainText }
+            }
+
+            Column { width: parent.width; spacing: 6
+              Text { text: "SAVE LOCATION"; color: root.alphaOf(root.fg, 0.5); font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1.1; textFormat: Text.PlainText }
+              Item { width: parent.width; height: 34
+                Rectangle { anchors.fill: parent; radius: 9; color: root.alphaOf(root.fg, 0.035); border.width: 1; border.color: root.alphaOf(root.fg, 0.08) }
                 Text {
                   anchors.fill: parent; anchors.leftMargin: 11; anchors.rightMargin: 11
-                  verticalAlignment: Text.AlignVCenter
-                  elide: Text.ElideMiddle
+                  verticalAlignment: Text.AlignVCenter; elide: Text.ElideMiddle
                   text: root.exportState === "done" && root.lastOutputPath !== "" ? root.lastOutputPath : root.outputDir
-                  color: root.fg
-                  font.pixelSize: 12
-                  font.family: "monospace"
-                  textFormat: Text.PlainText
+                  color: root.fg; font.pixelSize: 12; font.family: "monospace"; textFormat: Text.PlainText
                 }
               }
             }
 
-            Column {
-              width: parent.width
-              spacing: 8
-              visible: root.exportState !== "idle"
-              Item {
-                width: parent.width; height: 2
+            Column { width: parent.width; spacing: 8; visible: root.exportState !== "idle"
+              Item { width: parent.width; height: 3
                 Rectangle {
-                  height: parent.height; radius: 1
-                  width: parent.width * root.exportProgress
+                  height: parent.height; radius: 2; width: parent.width * root.exportProgress
                   color: root.exportState === "error" ? "#ff6b6b" : (root.exportState === "done" ? "#5bd68a" : root.accent)
                   Behavior on width { NumberAnimation { duration: 120 } }
                 }
               }
-              Row {
-                spacing: 8
+              Row { width: parent.width; spacing: 8
                 Icon { visible: root.exportState === "done"; anchors.verticalCenter: parent.verticalCenter; name: "check"; col: "#5bd68a" }
                 Icon { visible: root.exportState === "error"; anchors.verticalCenter: parent.verticalCenter; name: "close"; col: "#ff6b6b" }
                 Text {
-                  anchors.verticalCenter: parent.verticalCenter
-                  width: dlgCol.width - (root.exportState === "working" ? 0 : 26)
-                  wrapMode: Text.WordWrap
-                  text: root.exportMessage
+                  anchors.verticalCenter: parent.verticalCenter; width: dlgCol.width - 26
+                  wrapMode: Text.WordWrap; text: root.exportMessage
                   color: root.exportState === "error" ? "#ff6b6b" : (root.exportState === "done" ? "#5bd68a" : root.alphaOf(root.fg, 0.75))
-                  font.pixelSize: root.mediumFontPx
-                  textFormat: Text.PlainText
+                  font.pixelSize: root.mediumFontPx; textFormat: Text.PlainText
                 }
               }
             }
 
             Item {
-              width: parent.width; height: 36
-              Row {
-                anchors.right: parent.right
-                spacing: 6
+              width: parent.width; height: 38
+              Row { anchors.left: parent.left; anchors.right: parent.right; spacing: 6
                 IconButton {
                   visible: root.exportState === "idle" || root.exportState === "error"
+                  width: 76
                   label: root.exportState === "error" ? "Close" : "Cancel"
                   onClicked: root.exportDialogOpen = false
                 }
                 IconButton {
                   visible: root.exportState === "idle" || root.exportState === "error"
-                  primary: true; icon: "export"; label: root.exportState === "error" ? "Retry" : "Export"
+                  width: parent.width - 82; primary: true; icon: "export"
+                  label: root.exportState === "error" ? "Retry export" : "Export"
                   onClicked: root.startExport()
                 }
-                IconButton {
-                  visible: root.exportState === "working"
-                  enabled: false; label: "Exporting…"
-                }
-                IconButton {
-                  visible: root.exportState === "done"
-                  enabled: !copyExportProc.running
-                  icon: "copy"; label: copyExportProc.running ? "Copying…" : "Copy file"; tip: "Copy exported file"
-                  onClicked: root.copyExport()
-                }
-                IconButton {
-                  visible: root.exportState === "done"
-                  icon: "copy"; label: "Copy path"; tip: "Copy file path"
-                  onClicked: copyPathProc.running = true
-                }
-                IconButton {
-                  visible: root.exportState === "done"
-                  icon: "folder"; label: "Open folder"
-                  onClicked: openFolderProc.running = true
-                }
-                IconButton {
-                  visible: root.exportState === "done"
-                  primary: true; label: "Done"
-                  onClicked: root.close()
-                }
+                IconButton { visible: root.exportState === "working"; enabled: false; label: "Exporting…" }
+                IconButton { visible: root.exportState === "done"; enabled: !copyExportProc.running; icon: "copy"; label: copyExportProc.running ? "Copying…" : "Copy file"; onClicked: root.copyExport() }
+                IconButton { visible: root.exportState === "done"; icon: "copy"; label: "Copy path"; onClicked: copyPathProc.running = true }
+                IconButton { visible: root.exportState === "done"; icon: "folder"; label: "Open folder"; onClicked: openFolderProc.running = true }
+                IconButton { visible: root.exportState === "done"; primary: true; label: "Done"; onClicked: root.close() }
               }
             }
           }
